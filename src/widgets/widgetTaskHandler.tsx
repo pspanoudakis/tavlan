@@ -14,13 +14,10 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     nameToWidget[widgetInfo.widgetName as keyof typeof nameToWidget];
 
   switch (props.widgetAction) {
-    case 'WIDGET_ADDED':
-      props.renderWidget(<Widget />);
-      break;
     case 'WIDGET_UPDATE':
+    case 'WIDGET_ADDED':
     case 'WIDGET_RESIZED':
       props.renderWidget(<Widget />);
-      break;
     case 'WIDGET_DELETED':
       // Not needed for now
       break;
