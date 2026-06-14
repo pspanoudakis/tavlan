@@ -33,6 +33,10 @@ type SLAPITransportMode = (
     'TAXI'
 )
 
+type SLAPISiteDeparturesResponse = {
+    departures: SLAPIDeparture[]
+}
+
 type SLAPIDeparture = {
     destination: string,
     display: string,
@@ -54,14 +58,19 @@ async function fetchDataFromSLApi<R, T>(relativeEndpoint: string, mapper?: (resp
         const res = await fetch(getAPIEndpoint(relativeEndpoint));
         try {
             const resJson = await res.json() as R;
-            return mapper?.(resJson) ?? resJson;
+            try {
+                return mapper?.(resJson) ?? resJson;
+            } catch (e) {
+                console.error(`Error while mapping response`, e);
+                return Promise.reject(e);
+            }
         } catch (e) {
             console.error(`Error while parsing SL data as JSON`, e);
-            throw e;
+            return Promise.reject(e);
         }
     } catch (e) {
         console.error(`Error while fetching SL data.`, e);
-        throw e;
+        return Promise.reject(e);
     }
 }
 
@@ -74,9 +83,9 @@ export async function fetchSLStopPoints() {
 }
 
 export async function fetchSiteDepartures<T>(
-    siteId: string, transportType: string, mapper: (response: SLAPIDeparture[]) => T
+    siteId: string, transportType: string, mapper: (response: SLAPISiteDeparturesResponse) => T
 ) {
-    return await fetchDataFromSLApi<SLAPIDeparture[], T>(
+    return await fetchDataFromSLApi<SLAPISiteDeparturesResponse, T>(
         `sites/${siteId}/departures?transport=${transportType}`, mapper
     );
 }

@@ -30,20 +30,25 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
 
     public async init() {
         // Check if SL stops data already stored in Storage
-        const fetchedOn = await SLService.runCacheDBQuery<{fetchedOn: string}>(
-            'SELECT * FROM cache_fetched_on'
-        )
-        // If cache exists and is not older than 1 month, reuse it and skip network
-        const fetchedDate = fetchedOn[0]?.fetchedOn ? new Date(fetchedOn[0].fetchedOn) : null;
-        const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
-        const cachedStopOptions: StopOption[] = await SLService.getStopOptionsFromDB(
-            this.getAvailableTransportOptions().map(o => o.typeCode)
-        )
-        if (fetchedDate && (Date.now() - fetchedDate.getTime()) <= ONE_MONTH_MS) {
-            if (cachedStopOptions.length) {
-                this.stopOptions = cachedStopOptions;
-                return;
-            }
+        const fetchedOnExists = await SLService.runCacheDBQuery(
+            `SELECT name FROM sqlite_master WHERE type='table' AND name='cacheFethedOn';`
+        );
+        if (fetchedOnExists.length) {
+            const fetchedOn = await SLService.runCacheDBQuery<{fetchedOn: string}>(
+                'SELECT * FROM cache_fetched_on'
+            )
+            // If cache exists and is not older than 1 month, reuse it and skip network
+            const fetchedDate = fetchedOn[0]?.fetchedOn ? new Date(fetchedOn[0].fetchedOn) : null;
+            const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+            const cachedStopOptions: StopOption[] = await SLService.getStopOptionsFromDB(
+                this.getAvailableTransportOptions().map(o => o.typeCode)
+            )
+            if (fetchedDate && (Date.now() - fetchedDate.getTime()) <= ONE_MONTH_MS) {
+                if (cachedStopOptions.length) {
+                    this.stopOptions = cachedStopOptions;
+                    return;
+                }
+            }            
         }
         // Fetch again since data is old/not present
         try {
@@ -74,11 +79,15 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
             
             // Ensure cache table exists
             await SLService.runCacheDBQuery(
-                `DROP TABLE IF EXISTS stop; ` +
+                `DROP TABLE IF EXISTS stop;`
+            );
+            await SLService.runCacheDBQuery(
                 `CREATE TABLE stop (code TEXT PRIMARY KEY, displayName TEXT)`
             );
             await SLService.runCacheDBQuery(
-                `DROP TABLE IF EXISTS stop_transport_option; ` +
+                `DROP TABLE IF EXISTS stop_transport_option;`
+            );
+            await SLService.runCacheDBQuery(
                 `CREATE TABLE stop_transport_option (stopCode TEXT, option TEXT)`
             );
             await Promise.all([
@@ -92,7 +101,9 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
                 )) ?? []).flat(1),
             ]);
             await SLService.runCacheDBQuery(
-                `DROP TABLE IF EXISTS cache_fetched_on; ` +
+                `DROP TABLE IF EXISTS cache_fetched_on;`
+            );
+            await SLService.runCacheDBQuery(
                 `CREATE TABLE IF NOT EXISTS cache_fetched_on (fetchedOn TEXT)`
             );
             await SLService.runCacheDBQuery(
@@ -137,9 +148,9 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
             'SELECT stop.code, stop.displayName, stop_transport_option.option FROM stop ' +
             'JOIN stop_transport_option on stop.code = stop_transport_option.stopCode ' +
             `WHERE stop_transport_option.option IN (${options})`,
-            Object.fromEntries(
-                transportTypes.map((type, i) => [`$type${i}`, type])
-            )
+            // Object.fromEntries(
+            //     transportTypes.map((type, i) => [`$type${i}`, type])
+            // )
         );
         
         const stopMap = new Map<string, StopOption>();
@@ -169,17 +180,19 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
         stopCode: string, transportTypes: TransportTypeCode[]
     ) {
         return fetchSiteDepartures<DepartureEntry<AdditionalSLStopInfo>[]>(
-            stopCode, transportTypes[0], res => res.map(d => ({
-                destination: d.destination,
-                lineCode: d.line.id.toString(),
-                direction: 1,
-                departsInMillis: new Date(d.expected).getTime(),
-                additionalInfo: {
-                    lineColor: '#8f1212',
-                    isShortTrain: false,
-                    serviceInfo: ''
-                }
-            }))
+            stopCode, transportTypes[0], res => {
+                return res.departures.map(d => ({
+                    destination: d.destination,
+                    lineCode: d.line.id.toString(),
+                    direction: 1,
+                    departsInMillis: new Date(d.expected).getTime(),
+                    additionalInfo: {
+                        lineColor: '#8f1212',
+                        isShortTrain: false,
+                        serviceInfo: ''
+                    }
+                }))
+            }
         )
     }
 }
