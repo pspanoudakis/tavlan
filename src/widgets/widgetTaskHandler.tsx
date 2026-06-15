@@ -17,7 +17,17 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     case 'WIDGET_UPDATE':
     case 'WIDGET_ADDED':
     case 'WIDGET_RESIZED':
-      props.renderWidget(<Widget />);
+      // const slService = new SLService();
+      // await slService.init()
+      // const departures = await slService.getLiveDeparturesFromStop("9192", ["METRO"]);
+      // console.log(departures);
+      // props.renderWidget(
+      //   <Widget
+      //     stationName={'Tallkrogen'}
+      //     transportType={'T-BANA'}
+      //     departures={departures}
+      //   />
+      // );
     case 'WIDGET_DELETED':
       // Not needed for now
       break;
