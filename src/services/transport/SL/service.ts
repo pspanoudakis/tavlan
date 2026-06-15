@@ -187,7 +187,7 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
                     direction: 1,
                     departsInMillis: new Date(d.expected).getTime(),
                     additionalInfo: {
-                        lineColor: '#8f1212',
+                        lineColor: '#05662a',
                         isShortTrain: false,
                         serviceInfo: ''
                     }

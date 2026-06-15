@@ -31,7 +31,7 @@ export function BoardHeader({
                 imageWidth={14}
             />
             <TextWidget
-                text='T A L L K R O G E N'
+                text={stationName.toUpperCase().split('').map(c => `${c} `).join('')}
                 style={styles.headerText}
             />
         </FlexWidget>

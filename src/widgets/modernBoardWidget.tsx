@@ -1,7 +1,7 @@
 'use no memo';
-import { FlexWidget, requestWidgetUpdate, TextWidget } from 'react-native-android-widget';
+import { FlexWidget, TextWidget } from 'react-native-android-widget';
 import { BoardHeader } from './boardHeader';
-import { BoardProps, sampleData } from './common';
+import { BoardProps } from './common';
 
 export function ModernBoard({
     stationName,
@@ -25,7 +25,7 @@ export function ModernBoard({
             >
                 {visibleDepartures.map((d, index) => (
                     <FlexWidget
-                        key={d.lineNumber}
+                        key={d.lineCode}
                         style={{
                             ...styles.row,
                             ...(index < visibleDepartures.length - 1
@@ -42,7 +42,7 @@ export function ModernBoard({
                         >
                             <FlexWidget
                                 style={{
-                                    backgroundColor: d.lineColor,
+                                    backgroundColor: d.additionalInfo.lineColor,
                                     borderRadius: 4,
                                     paddingHorizontal: 11,
                                     paddingBottom: 2,
@@ -51,7 +51,7 @@ export function ModernBoard({
                                 }}
                             >
                                 <TextWidget
-                                    text={d.lineNumber.toString()}
+                                    text={d.lineCode}
                                     style={{
                                         ...styles.modernText,
                                         fontSize: 14
@@ -67,7 +67,7 @@ export function ModernBoard({
                             />
                         </FlexWidget>
                         <TextWidget
-                            text={`${d.departsIn} min`}
+                            text={`${Math.ceil((d.departsInMillis - Date.now()) / (1000 * 60))} min`}
                             style={styles.modernText}
                         />
                     </FlexWidget>
@@ -77,13 +77,14 @@ export function ModernBoard({
     )
 }
 
-export function ModernBoardWidget() {
+export function ModernBoardWidget(props: BoardProps) {
     return (
-        <ModernBoard
-            stationName={sampleData.stationName}
-            transportType={sampleData.transportType}
-            departures={sampleData.departures}
-        />
+        // <ModernBoard
+        //     stationName={sampleData.stationName}
+        //     transportType={sampleData.transportType}
+        //     departures={sampleData.departures}
+        // />
+        <ModernBoard {...props}/>
     );
 }
 
@@ -118,9 +119,9 @@ const styles = {
 } as const;
 
 // In development, automatically update the home screen widget on Fast Refresh
-if (__DEV__) {
-  requestWidgetUpdate({
-    widgetName: 'ModernBoard',
-    renderWidget: () => <ModernBoardWidget />,
-  });
-}
+// if (__DEV__) {
+//   requestWidgetUpdate({
+//     widgetName: 'ModernBoard',
+//     renderWidget: () => <ModernBoardWidget />,
+//   });
+// }

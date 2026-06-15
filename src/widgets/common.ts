@@ -1,3 +1,5 @@
+import { DepartureEntry } from "@/services/transport/genericTransportService";
+import { AdditionalSLStopInfo } from "@/services/transport/SL/service";
 import { HexColor } from "react-native-android-widget";
 
 const mainLineColors = {
@@ -58,10 +60,5 @@ export type TransportType = 'T-BANA' | 'SJ-PTAG'
 export interface BoardProps {
     transportType: TransportType
     stationName: string,
-    departures: Array<{
-        lineNumber: number
-        lineColor: HexColor
-        destination: string,
-        departsIn: number
-    }>
+    departures: DepartureEntry<AdditionalSLStopInfo>[]
 }

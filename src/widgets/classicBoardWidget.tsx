@@ -1,7 +1,7 @@
 'use no memo';
-import { FlexWidget, requestWidgetUpdate, TextWidget } from 'react-native-android-widget';
+import { FlexWidget, TextWidget } from 'react-native-android-widget';
 import { BoardHeader } from './boardHeader';
-import { BoardProps, sampleData } from './common';
+import { BoardProps } from './common';
 
 export function ClassicBoard({
     transportType,
@@ -22,7 +22,7 @@ export function ClassicBoard({
             >
                 {departures.slice(0, 2).map(d => (
                     <FlexWidget
-                        key={d.lineNumber}
+                        key={d.lineCode}
                         style={{
                             width: 'match_parent',
                             flexDirection: 'row',
@@ -38,7 +38,7 @@ export function ClassicBoard({
                             }}
                         >
                             <TextWidget
-                                text={d.lineNumber.toString()}
+                                text={d.lineCode}
                                 style={styles.pixelizedText}
                             />
                             <TextWidget
@@ -47,7 +47,7 @@ export function ClassicBoard({
                             />
                         </FlexWidget>
                         <TextWidget
-                            text={`${d.departsIn} min`}
+                            text={`${Math.ceil((d.departsInMillis - Date.now()) / (1000 * 60))} min`}
                             style={styles.pixelizedText}
                         />
                     </FlexWidget>
@@ -57,13 +57,9 @@ export function ClassicBoard({
     )
 }
 
-export function ClassicBoardWidget() {
+export function ClassicBoardWidget(props: BoardProps) {
     return (
-        <ClassicBoard
-            stationName={sampleData.stationName}
-            transportType={sampleData.transportType}
-            departures={sampleData.departures}
-        />
+        <ClassicBoard {...props}/>
     );
 }
 
@@ -91,9 +87,9 @@ const styles = {
 } as const;
 
 // In development, automatically update the home screen widget on Fast Refresh
-if (__DEV__) {
-  requestWidgetUpdate({
-    widgetName: 'ClassicBoard',
-    renderWidget: () => <ClassicBoardWidget />,
-  });
-}
+// if (__DEV__) {
+//   requestWidgetUpdate({
+//     widgetName: 'ClassicBoard',
+//     renderWidget: () => <ClassicBoardWidget />,
+//   });
+// }
