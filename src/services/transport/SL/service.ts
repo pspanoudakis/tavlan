@@ -4,20 +4,26 @@ import { fetchSiteDepartures, fetchSLSites, fetchSLStopPoints, SLAPIStopAreaType
 
 const SL_STOPS_CACHE_DB = 'SL_STOPS_CACHE';
 
-type HexColor = `#${string}`;
-type RgbaColor = `rgba(${number}, ${number}, ${number}, ${number})`;
-type LineColor = HexColor | RgbaColor;
-
 enum SLServiceTransportType {
     METRO = 'METRO',
     COMMUTER = 'COMMUTER',
     UNKNOWN = 'UNKNOWN',
 }
 
+type LineColor = `#${string}`;
+
 export type AdditionalSLStopInfo = {
     lineColor: LineColor,
     isShortTrain?: boolean,
     serviceInfo: string
+}
+
+const mainLineColors: {[s: string]: LineColor} = {
+    RED: '#e32222',
+    GREEN: '#05662a',
+    BLUE: '#4785e7',
+    PINK: '#f166a7',
+    FALLBACK: '#ffff',
 }
 
 export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
@@ -126,6 +132,31 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
             throw e;
         }
     }
+    
+    static getLineColor(lineCode: string) {
+        switch (lineCode) {
+            case '10':
+            case '11':
+                return mainLineColors.BLUE;
+            case '13':
+            case '14':
+                return mainLineColors.RED;
+            case '17':
+            case '18':
+            case '19':
+                return mainLineColors.GREEN;
+            case '40':
+            case '41':
+            case '42':
+            case '43':
+            case '43X':
+            case '48':
+                return mainLineColors.PINK;
+            default:
+                return mainLineColors.FALLBACK;
+        }
+    }
+    
 
     static mapSLStopAreaTypeToTransportType(sat: SLAPIStopAreaType) {
         switch (sat) {
@@ -193,18 +224,55 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
     ) {
         return fetchSiteDepartures<DepartureEntry<AdditionalSLStopInfo>[]>(
             stopCode, transportTypes[0], res => {
-                return res.departures.map(d => ({
-                    destination: d.destination,
-                    lineCode: d.line.id.toString(),
-                    direction: 1,
-                    departsInMillis: new Date(d.expected).getTime(),
-                    additionalInfo: {
-                        lineColor: '#05662a',
-                        isShortTrain: false,
-                        serviceInfo: ''
-                    }
-                }))
+                
+                // 1. Get current Stockholm time broken down into clean digits (Hermes-safe)
+                const parts = new Intl.DateTimeFormat('sv-SE', {
+                    timeZone: 'Europe/Stockholm',
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    hour12: false
+                }).formatToParts(new Date());
+
+                const p = Object.fromEntries(parts.map(part => [part.type, part.value]));
+                
+                // Create a fake UTC reference point for "Right Now in Stockholm"
+                const stockholmNowMillis = Date.UTC(
+                    parseInt(p.year, 10),
+                    parseInt(p.month, 10) - 1,
+                    parseInt(p.day, 10),
+                    parseInt(p.hour, 10),
+                    parseInt(p.minute, 10),
+                    parseInt(p.second, 10)
+                );
+
+                return res.departures.map(d => {
+                    // 2. Extract digits directly from the API string "YYYY-MM-DDTHH:mm:ss"
+                    const year = parseInt(d.expected.substring(0, 4), 10);
+                    const month = parseInt(d.expected.substring(5, 7), 10) - 1;
+                    const day = parseInt(d.expected.substring(8, 10), 10);
+                    const hour = parseInt(d.expected.substring(11, 13), 10);
+                    const minute = parseInt(d.expected.substring(14, 16), 10);
+                    const second = parseInt(d.expected.substring(17, 19) || '0', 10);
+
+                    // Create a matching fake UTC reference point for the departure
+                    const departureMillis = Date.UTC(year, month, day, hour, minute, second);
+
+                    // 3. Subtract them directly
+                    const timeLeftInMillis = Math.max(0, departureMillis - stockholmNowMillis);
+                    const lineCode = d.line.id.toString();
+                    return {
+                        destination: d.destination,
+                        lineCode,
+                        direction: 1,
+                        departsInMillis: timeLeftInMillis,
+                        additionalInfo: {
+                            lineColor: SLService.getLineColor(lineCode),
+                            isShortTrain: false,
+                            serviceInfo: ''
+                        }
+                    };
+                });
             }
-        )
+        );
     }
 }

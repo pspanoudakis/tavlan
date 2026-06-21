@@ -23,12 +23,14 @@ export function ModernBoard({
                     paddingVertical: 4
                 }}
             >
-                {visibleDepartures.map((d, index) => (
-                    <FlexWidget
-                        key={d.lineCode}
-                        style={{
-                            ...styles.row,
-                            ...(index < visibleDepartures.length - 1
+                {visibleDepartures.map((d, index) => {
+                    const minutesUntilDeparture = Math.ceil(d.departsInMillis / (1000 * 60));
+                    return (
+                        <FlexWidget
+                            key={d.lineCode}
+                            style={{
+                                ...styles.row,
+                                ...(index < visibleDepartures.length - 1
                                 ? styles.rowWithDivider
                                 : {}),
                         }}
@@ -67,11 +69,14 @@ export function ModernBoard({
                             />
                         </FlexWidget>
                         <TextWidget
-                            text={`${Math.ceil((d.departsInMillis - Date.now()) / (1000 * 60))} min`}
+                            text={
+                                minutesUntilDeparture ?
+                                `${minutesUntilDeparture} min` : 'Nu'
+                            }
                             style={styles.modernText}
                         />
                     </FlexWidget>
-                ))}
+                )})}
             </FlexWidget>
         </FlexWidget>
     )

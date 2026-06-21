@@ -20,12 +20,14 @@ export function ClassicBoard({
                     paddingHorizontal: 12,
                 }}
             >
-                {departures.slice(0, 2).map(d => (
-                    <FlexWidget
-                        key={d.lineCode}
-                        style={{
-                            width: 'match_parent',
-                            flexDirection: 'row',
+                {departures.slice(0, 2).map(d => {
+                    const minutesUntilDeparture = Math.ceil(d.departsInMillis / (1000 * 60));
+                    return (
+                        <FlexWidget
+                            key={d.lineCode}
+                            style={{
+                                width: 'match_parent',
+                                flexDirection: 'row',
                             justifyContent: 'space-between',
                             alignItems: 'center',
                         }}
@@ -47,11 +49,14 @@ export function ClassicBoard({
                             />
                         </FlexWidget>
                         <TextWidget
-                            text={`${Math.ceil((d.departsInMillis - Date.now()) / (1000 * 60))} min`}
+                            text={
+                                minutesUntilDeparture ?
+                                `${minutesUntilDeparture} min` : 'Nu'
+                            }
                             style={styles.pixelizedText}
                         />
                     </FlexWidget>
-                ))}
+                )})}
             </FlexWidget>
         </FlexWidget>
     )

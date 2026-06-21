@@ -59,6 +59,10 @@ async function fetchDataFromSLApi<R, T>(relativeEndpoint: string, mapper?: (resp
         try {
             const resJson = await res.json() as R;
             try {
+                if (!res.ok) {
+                    console.error(`Error returned by SL API: `, resJson);
+                    return Promise.reject((resJson as any).description);
+                }
                 return mapper?.(resJson) ?? resJson;
             } catch (e) {
                 console.error(`Error while mapping response`, e);
