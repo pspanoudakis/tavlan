@@ -1,3 +1,5 @@
+import { SLService } from '@/services/transport/SL/service';
+import * as Storage from '@/utils/storage';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 import { ClassicBoardWidget } from './classicBoardWidget';
 import { ModernBoardWidget } from './modernBoardWidget';
@@ -17,17 +19,21 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     case 'WIDGET_UPDATE':
     case 'WIDGET_ADDED':
     case 'WIDGET_RESIZED':
-      // const slService = new SLService();
-      // await slService.init()
-      // const departures = await slService.getLiveDeparturesFromStop("9192", ["METRO"]);
-      // console.log(departures);
-      // props.renderWidget(
-      //   <Widget
-      //     stationName={'Tallkrogen'}
-      //     transportType={'T-BANA'}
-      //     departures={departures}
-      //   />
-      // );
+      const slService = new SLService();
+      await slService.init();
+      const savedTransport = await Storage.getStoredTransportType() ?? 'METRO';
+      const savedStopCode = await Storage.getStoredStation() ?? '';
+      const departures = await slService.getLiveDeparturesFromStop(savedStopCode, [savedTransport]);
+      const savedStationName = await slService.getStopNameByCode(savedStopCode);
+      console.log('saved code:', savedStopCode);
+      console.log('saved name:', savedStationName);
+      props.renderWidget(
+        <Widget
+          stationName={savedStationName ?? ''}
+          transportType={savedTransport}
+          departures={departures}
+        />
+      );
     case 'WIDGET_DELETED':
       // Not needed for now
       break;

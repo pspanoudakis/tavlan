@@ -27,7 +27,7 @@ const mainLineColors: {[s: string]: LineColor} = {
 }
 
 export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
-    _db: SQLite.SQLiteDatabase | undefined = undefined;
+   static  _db: SQLite.SQLiteDatabase | undefined = undefined;
 
     constructor() {
         super();
@@ -56,6 +56,7 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
         }
         // Fetch again since data is old/not present
         try {
+            console.log('re-initializing DB...')
             const fetchedOn = new Date();
             const [sitesRes, stopAreasRes] = await Promise.all([
                 fetchSLSites(), fetchSLStopPoints()
@@ -170,10 +171,10 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
     }
 
     async runCacheDBQuery<R>(statement: string, values: SQLite.SQLiteBindParams = {}) {
-        if (!this._db) {
-            this._db = await SQLite.openDatabaseAsync(SL_STOPS_CACHE_DB);
+        if (!SLService._db) {
+            SLService._db = await SQLite.openDatabaseAsync(SL_STOPS_CACHE_DB);
         }
-        return await this._db.getAllAsync<R>(statement, values);
+        return await SLService._db.getAllAsync<R>(statement, values);
     }
 
     async getStopOptionsFromDB(transportTypes: TransportTypeCode[]) {
@@ -213,6 +214,15 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
             { typeCode: 'METRO', displayName: 'Tunnelbana' },
             { typeCode: 'COMMUTER', displayName: 'Pendeltåg' },
         ]
+    }
+
+    public async getStopNameByCode(code: string): Promise<string | undefined> {
+        return (
+            await this.runCacheDBQuery<{ displayName: string }>(
+                'SELECT displayName FROM stop WHERE code = $code',
+                { $code: code }
+            )
+        )[0]?.displayName
     }
 
     public getAvailableStops(transportTypes: TransportTypeCode[]) {

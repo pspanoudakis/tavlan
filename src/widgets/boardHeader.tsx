@@ -27,7 +27,7 @@ export function BoardHeader({
         >
             <ImageWidget
                 image={
-                    (transportType === 'METRO' && require('@/assets/images/t-bana-favicon.png')) ||
+                    (transportType === 'METRO' && require('@/assets/images/t-bana.png')) ||
                     (transportType === 'TRAIN' && require('@/assets/images/sj-ptag.png'))
                 }
                 imageHeight={14}

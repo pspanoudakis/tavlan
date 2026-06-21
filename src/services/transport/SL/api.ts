@@ -57,6 +57,7 @@ async function fetchDataFromSLApi<R, T>(relativeEndpoint: string, mapper?: (resp
     try {
         const res = await fetch(getAPIEndpoint(relativeEndpoint));
         try {
+            console.log(res);
             const resJson = await res.json() as R;
             try {
                 if (!res.ok) {
