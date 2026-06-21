@@ -34,6 +34,7 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
           departures={departures}
         />
       );
+      break;
     case 'WIDGET_DELETED':
       // Not needed for now
       break;

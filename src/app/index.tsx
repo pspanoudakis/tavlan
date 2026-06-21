@@ -18,7 +18,7 @@ const TRANSPORT_OPTIONS: { label: string; value: TransportType }[] = [
 const STATION_OPTIONS: Record<string, { label: string; value: string }[]> = {
   'METRO': [
     { label: 'Hässelby Gård', value: '9101' },
-    { label: 'Vällingby', value: '9102' },
+    { label: 'Johannelund', value: '9102' },
     { label: 'T-Centralen', value: '9001' },
   ],
   'TRAIN': [
