@@ -1,6 +1,8 @@
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { requestWidgetUpdate, WidgetPreview } from 'react-native-android-widget';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { SelectField } from '@/components/SelectField';
@@ -32,7 +34,9 @@ const BOARD_NAMES = [
 
 export default function Index() {
   const theme = useTheme();
-  const scheme = useColorScheme();
+  // The app draws edge to edge (edgeToEdgeEnabled=true, transparent system
+  // bars), so with the header gone the content has to inset itself.
+  const insets = useSafeAreaInsets();
 
   const [departures, setDepartures] = useState<DepartureEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -222,6 +226,7 @@ export default function Index() {
   if (initializing) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.background }]}>
+        <StatusBar style="auto" />
         <ActivityIndicator size="large" color={theme.accent} />
         <Text style={[styles.mutedText, { color: theme.textMuted }]}>Starting up…</Text>
       </View>
@@ -232,10 +237,13 @@ export default function Index() {
 
   return (
     <>
-      <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
+      <StatusBar style="auto" />
       <ScrollView
         style={{ backgroundColor: theme.background }}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xxl },
+        ]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
@@ -361,8 +369,8 @@ export default function Index() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xxl,
-    paddingBottom: spacing.xxl * 2,
+    // Vertical padding is applied at the call site, where the safe area insets
+    // are known.
   },
   centered: {
     flex: 1,
