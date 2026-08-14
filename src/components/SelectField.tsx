@@ -1,12 +1,22 @@
-import type { StopOption } from '@/services/transport/genericTransportService';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { radius, spacing, useTheme } from './theme';
 
-type Props = {
-    stops: StopOption[] | null;
+export type SelectOption = {
     value: string;
-    onChange: (stopCode: string) => void;
+    label: string;
+};
+
+type Props = {
+    options: SelectOption[] | null;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    emptyLabel?: string;
+    loadingLabel?: string;
+    searchPlaceholder?: string;
+    /** Defaults to on once the list is long enough to be worth filtering. */
+    searchable?: boolean;
 };
 
 const canNormalise = typeof String.prototype.normalize === 'function';
@@ -21,44 +31,60 @@ function fold(value: string) {
     return canNormalise ? lower.normalize('NFD').replace(/[\u0300-\u036f]/g, '') : lower;
 }
 
-export function StationPicker({ stops, value, onChange }: Props) {
+/**
+ * A dropdown that expands in place rather than opening a dialog.
+ *
+ * Android's native picker takes over the screen, which is heavy for a choice
+ * made on one screen with the result visible right below it. Everything here
+ * stays on the same surface, and the list scrolls with the page.
+ */
+export function SelectField({
+    options,
+    value,
+    onChange,
+    placeholder = 'Select',
+    emptyLabel = 'Nothing available',
+    loadingLabel = 'Loading…',
+    searchPlaceholder = 'Search',
+    searchable,
+}: Props) {
     const theme = useTheme();
     const [expanded, setExpanded] = useState(false);
     const [query, setQuery] = useState('');
 
-    const selected = stops?.find(s => s.stopCode === value);
+    const showSearch = searchable ?? (options ? options.length > 10 : false);
+    const selected = options?.find(o => o.value === value);
 
     const matches = useMemo(() => {
-        if (!stops) return [];
-        const needle = fold(query.trim());
-        if (!needle) return stops;
-        return stops.filter(s => fold(s.displayName).includes(needle));
-    }, [stops, query]);
+        if (!options) return [];
+        const needle = showSearch ? fold(query.trim()) : '';
+        if (!needle) return options;
+        return options.filter(o => fold(o.label).includes(needle));
+    }, [options, query, showSearch]);
 
-    const open = () => {
-        setQuery('');
-        setExpanded(true);
-    };
-
-    const choose = (stopCode: string) => {
-        onChange(stopCode);
+    const collapse = () => {
         setExpanded(false);
         setQuery('');
     };
 
-    if (stops === null) {
+    const choose = (next: string) => {
+        onChange(next);
+        collapse();
+    };
+
+    if (options === null) {
         return (
             <View style={[styles.field, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <ActivityIndicator size="small" color={theme.textMuted} />
-                <Text style={[styles.fieldValue, { color: theme.textMuted }]}>Loading stations…</Text>
+                <Text style={[styles.value, { color: theme.textMuted }]}>{loadingLabel}</Text>
             </View>
         );
     }
 
-    if (!stops.length) {
+    if (!options.length) {
         return (
             <View style={[styles.field, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <Text style={[styles.fieldValue, { color: theme.textMuted }]}>No stations available</Text>
+                <Text style={[styles.value, { color: theme.textMuted }]}>{emptyLabel}</Text>
             </View>
         );
     }
@@ -66,20 +92,16 @@ export function StationPicker({ stops, value, onChange }: Props) {
     if (!expanded) {
         return (
             <Pressable
-                onPress={open}
+                onPress={() => { setQuery(''); setExpanded(true); }}
                 accessibilityRole="button"
-                accessibilityLabel={`Station: ${selected?.displayName ?? 'none selected'}. Tap to change.`}
+                accessibilityLabel={`${selected?.label ?? placeholder}. Tap to change.`}
                 style={({ pressed }) => [
                     styles.field,
-                    {
-                        backgroundColor: theme.surface,
-                        borderColor: theme.border,
-                        opacity: pressed ? 0.7 : 1,
-                    },
+                    { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
                 ]}
             >
-                <Text numberOfLines={1} style={[styles.fieldValue, styles.fieldValueFilled, { color: theme.text }]}>
-                    {selected?.displayName ?? 'Select a station'}
+                <Text numberOfLines={1} style={[styles.value, styles.valueFilled, { color: theme.text }]}>
+                    {selected?.label ?? placeholder}
                 </Text>
                 <Text style={[styles.chevron, { color: theme.textMuted }]}>▾</Text>
             </Pressable>
@@ -88,43 +110,44 @@ export function StationPicker({ stops, value, onChange }: Props) {
 
     return (
         <View style={[styles.panel, { backgroundColor: theme.surface, borderColor: theme.accent }]}>
-            <View style={[styles.searchRow, { borderBottomColor: theme.border }]}>
-                <Text style={[styles.searchIcon, { color: theme.textMuted }]}>⌕</Text>
-                <TextInput
-                    value={query}
-                    onChangeText={setQuery}
-                    placeholder="Search stations"
-                    placeholderTextColor={theme.textMuted}
-                    style={[styles.searchInput, { color: theme.text }]}
-                    autoFocus
-                    autoCorrect={false}
-                    autoCapitalize="none"
-                    returnKeyType="search"
-                    accessibilityLabel="Search stations"
-                />
-                <Pressable
-                    onPress={() => setExpanded(false)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Cancel"
-                    hitSlop={8}
-                >
+            <View style={[styles.header, { borderBottomColor: theme.border }]}>
+                {showSearch ? (
+                    <>
+                        <Text style={[styles.searchIcon, { color: theme.textMuted }]}>⌕</Text>
+                        <TextInput
+                            value={query}
+                            onChangeText={setQuery}
+                            placeholder={searchPlaceholder}
+                            placeholderTextColor={theme.textMuted}
+                            style={[styles.searchInput, { color: theme.text }]}
+                            autoFocus
+                            autoCorrect={false}
+                            autoCapitalize="none"
+                            returnKeyType="search"
+                            accessibilityLabel={searchPlaceholder}
+                        />
+                    </>
+                ) : (
+                    <Text style={[styles.headerLabel, { color: theme.textMuted }]}>{placeholder}</Text>
+                )}
+                <Pressable onPress={collapse} accessibilityRole="button" accessibilityLabel="Cancel" hitSlop={8}>
                     <Text style={[styles.cancel, { color: theme.accent }]}>Cancel</Text>
                 </Pressable>
             </View>
 
             {matches.length === 0 ? (
                 <Text style={[styles.noMatches, { color: theme.textMuted }]}>
-                    No station matches “{query.trim()}”
+                    Nothing matches “{query.trim()}”
                 </Text>
             ) : (
                 // Rendered inline rather than in its own scroll view: nesting one
                 // scrollable inside another fights for the same gesture.
-                matches.map((stop, index) => {
-                    const isSelected = stop.stopCode === value;
+                matches.map((option, index) => {
+                    const isSelected = option.value === value;
                     return (
                         <Pressable
-                            key={stop.stopCode}
-                            onPress={() => choose(stop.stopCode)}
+                            key={option.value}
+                            onPress={() => choose(option.value)}
                             accessibilityRole="button"
                             accessibilityState={{ selected: isSelected }}
                             style={({ pressed }) => [
@@ -141,7 +164,7 @@ export function StationPicker({ stops, value, onChange }: Props) {
                                     isSelected && styles.rowLabelSelected,
                                 ]}
                             >
-                                {stop.displayName}
+                                {option.label}
                             </Text>
                             {isSelected && <Text style={[styles.tick, { color: theme.accent }]}>✓</Text>}
                         </Pressable>
@@ -162,11 +185,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.lg,
         minHeight: 52,
     },
-    fieldValue: {
+    value: {
         flex: 1,
         fontSize: 16,
     },
-    fieldValueFilled: {
+    valueFilled: {
         fontWeight: '600',
     },
     chevron: {
@@ -177,13 +200,19 @@ const styles = StyleSheet.create({
         borderRadius: radius.md,
         overflow: 'hidden',
     },
-    searchRow: {
+    header: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.sm,
         paddingHorizontal: spacing.lg,
         borderBottomWidth: 1,
         minHeight: 52,
+    },
+    headerLabel: {
+        flex: 1,
+        fontSize: 14,
+        fontWeight: '600',
+        letterSpacing: 0.5,
     },
     searchIcon: {
         fontSize: 18,

@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, 
 import { requestWidgetUpdate, WidgetPreview } from 'react-native-android-widget';
 
 import { SegmentedControl } from '@/components/SegmentedControl';
-import { StationPicker } from '@/components/StationPicker';
+import { SelectField } from '@/components/SelectField';
 import { radius, spacing, useTheme } from '@/components/theme';
 import { describeError } from '@/services/transport/errors';
 import {
@@ -260,11 +260,15 @@ export default function Index() {
           * would leave that path unseen until a second operator existed. */}
         <View style={styles.section}>
           <Text style={[styles.label, { color: theme.textMuted }]}>OPERATOR</Text>
-          <SegmentedControl
-            segments={TRANSPORT_PROVIDERS.map(p => ({ value: p.id, label: p.displayName }))}
+          {/* A dropdown rather than a segmented control: the operator is set
+            * once and rarely revisited, so it does not earn the width that
+            * transport does. */}
+          <SelectField
+            options={TRANSPORT_PROVIDERS.map(p => ({ value: p.id, label: p.displayName }))}
             value={providerId}
             onChange={handleProviderChange}
-            accessibilityLabel="Operator"
+            placeholder="Operator"
+            searchable={false}
           />
         </View>
         <View style={styles.section}>
@@ -280,7 +284,15 @@ export default function Index() {
 
         <View style={styles.section}>
           <Text style={[styles.label, { color: theme.textMuted }]}>STATION</Text>
-          <StationPicker stops={stops} value={effectiveStation} onChange={setStationCode} />
+          <SelectField
+            options={stops?.map(s => ({ value: s.stopCode, label: s.displayName })) ?? null}
+            value={effectiveStation}
+            onChange={setStationCode}
+            placeholder="Select a station"
+            loadingLabel="Loading stations…"
+            emptyLabel="No stations available"
+            searchPlaceholder="Search stations"
+          />
         </View>
 
         <View style={styles.section}>
