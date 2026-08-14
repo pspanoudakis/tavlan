@@ -3,15 +3,8 @@ import type { TransportProvider } from '@/services/transport/provider';
 import { getProvider, getService } from '@/services/transport/registry';
 import * as Storage from '@/utils/storage';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
-import { ClassicBoardWidget } from './classicBoardWidget';
 import { BoardProps, REFRESH_CLICK_ACTION } from './common';
-import { ModernBoardWidget } from './modernBoardWidget';
-
-const nameToWidget = {
-  // The widget name matches the Java class name or the configured name.
-  ClassicBoard: ClassicBoardWidget,
-  ModernBoard: ModernBoardWidget,
-};
+import { getBoard } from './registry';
 
 /**
  * Reads the saved selection and the departures for it.
@@ -81,13 +74,6 @@ async function describeFailure(
 
 export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
   const widgetInfo = props.widgetInfo;
-  const Widget =
-    nameToWidget[widgetInfo.widgetName as keyof typeof nameToWidget];
-
-  if (!Widget) {
-    console.warn(`[departures-widget] unknown widget "${widgetInfo.widgetName}"`);
-    return;
-  }
 
   const shouldRefresh =
     props.widgetAction === 'WIDGET_UPDATE' ||
@@ -100,6 +86,14 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
 
   const provider = getProvider(await Storage.getStoredProviderId().catch(() => null));
 
+  // Which design to draw depends on the selected operator, so the provider has
+  // to be resolved before the board component can be looked up.
+  const Board = getBoard(provider.id, widgetInfo.widgetName);
+  if (!Board) {
+    console.warn(`[departures-widget] unknown widget "${widgetInfo.widgetName}"`);
+    return;
+  }
+
   let board: BoardProps;
   try {
     board = await loadBoard(provider);
@@ -107,5 +101,5 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     board = await describeFailure(provider, error);
   }
 
-  props.renderWidget(<Widget {...board} />);
+  props.renderWidget(<Board {...board} />);
 }

@@ -1,7 +1,7 @@
 'use no memo';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
 import { BoardHeader } from './boardHeader';
-import { BoardProps, formatCountdown, REFRESH_CLICK_ACTION } from './common';
+import { BoardProps, formatCountdown, REFRESH_CLICK_ACTION } from '../common';
 
 export function ClassicBoard({
     transportType,

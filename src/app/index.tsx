@@ -13,8 +13,7 @@ import {
 import type { TransportProvider } from '@/services/transport/provider';
 import { DEFAULT_PROVIDER_ID, getProvider, getService, TRANSPORT_PROVIDERS } from '@/services/transport/registry';
 import * as Storage from '@/utils/storage';
-import { ClassicBoardWidget } from '@/widgets/classicBoardWidget';
-import { ModernBoardWidget } from '@/widgets/modernBoardWidget';
+import { getBoard } from '@/widgets/registry';
 
 /** Providers return stops in their own order; the dropdown wants them alphabetical. */
 function byLocalisedName(locale: string) {
@@ -34,6 +33,10 @@ export default function Index() {
 
   const provider = getProvider(providerId);
   const transportOptions: TransportTypeOption[] = getService(provider).getAvailableTransportOptions();
+
+  // Previews show the selected operator's own designs.
+  const ClassicBoard = getBoard(provider.id, 'ClassicBoard');
+  const ModernBoard = getBoard(provider.id, 'ModernBoard');
 
   // Both lists are tagged with what they were loaded for, so a list left over
   // from a previous selection can never be read as the current one.
@@ -152,14 +155,14 @@ export default function Index() {
       // Pushed in release builds too: the OS only refreshes a widget every 30
       // minutes, so without this a new selection would not reach the home screen
       // until long after it was made.
-      requestWidgetUpdate({
-        widgetName: 'ClassicBoard',
-        renderWidget: () => <ClassicBoardWidget {...boardProps} />,
-      });
-      requestWidgetUpdate({
-        widgetName: 'ModernBoard',
-        renderWidget: () => <ModernBoardWidget {...boardProps} />,
-      });
+      for (const widgetName of ['ClassicBoard', 'ModernBoard'] as const) {
+        const Board = getBoard(activeProvider.id, widgetName);
+        if (!Board) continue;
+        requestWidgetUpdate({
+          widgetName,
+          renderWidget: () => <Board {...boardProps} />,
+        });
+      }
     } catch (e) {
       console.error("Error fetching data or updating widgets:", e);
       setDepartures([]);
@@ -207,25 +210,19 @@ export default function Index() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.selectorWrapper}>
-        {/* Only worth showing once there is a choice to make. */}
-        {TRANSPORT_PROVIDERS.length > 1 && (
-          <>
-            <Text style={styles.label}>Operator</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={providerId}
-                onValueChange={(itemValue) => handleProviderChange(itemValue)}
-                dropdownIconColor="#495057"
-              >
-                {TRANSPORT_PROVIDERS.map((p) => (
-                  <Picker.Item key={p.id} label={p.displayName} value={p.id} />
-                ))}
-              </Picker>
-            </View>
-          </>
-        )}
-
-        <Text style={styles.label}>Transportmedel</Text>
+        <Text style={styles.label}>Operator</Text>
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={providerId}
+            onValueChange={(itemValue) => handleProviderChange(itemValue)}
+            dropdownIconColor="#495057"
+          >
+            {TRANSPORT_PROVIDERS.map((p) => (
+              <Picker.Item key={p.id} label={p.displayName} value={p.id} />
+            ))}
+          </Picker>
+        </View>
+        <Text style={styles.label}>Transport Type</Text>
         <View style={styles.pickerContainer}>
           <Picker
             selectedValue={effectiveTransport}
@@ -275,33 +272,37 @@ export default function Index() {
         </View>
       ) : (
         <View style={styles.previewContainer}>
-          <WidgetPreview
-            renderWidget={() => (
-              <ClassicBoardWidget
-                stationName={currentStationLabel}
-                transportType={effectiveTransport}
-                departures={departures}
-                presentation={provider}
-                message={error ?? undefined}
-              />
-            )}
-            width={320}
-            height={200}
-          />
+          {ClassicBoard && (
+            <WidgetPreview
+              renderWidget={() => (
+                <ClassicBoard
+                  stationName={currentStationLabel}
+                  transportType={effectiveTransport}
+                  departures={departures}
+                  presentation={provider}
+                  message={error ?? undefined}
+                />
+              )}
+              width={320}
+              height={200}
+            />
+          )}
           <View style={{ height: 20 }} />
-          <WidgetPreview
-            renderWidget={() => (
-              <ModernBoardWidget
-                stationName={currentStationLabel}
-                transportType={effectiveTransport}
-                departures={departures}
-                presentation={provider}
-                message={error ?? undefined}
-              />
-            )}
-            width={320}
-            height={200}
-          />
+          {ModernBoard && (
+            <WidgetPreview
+              renderWidget={() => (
+                <ModernBoard
+                  stationName={currentStationLabel}
+                  transportType={effectiveTransport}
+                  departures={departures}
+                  presentation={provider}
+                  message={error ?? undefined}
+                />
+              )}
+              width={320}
+              height={200}
+            />
+          )}
         </View>
       )}
     </ScrollView>

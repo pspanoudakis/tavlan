@@ -2,7 +2,7 @@
 import type { TransportTypeCode } from "@/services/transport/genericTransportService";
 import type { BoardPresentation } from "@/services/transport/provider";
 import { FlexWidget, ImageWidget, TextWidget } from "react-native-android-widget";
-import { formatUpdatedAt } from "./common";
+import { formatUpdatedAt } from "../common";
 
 export interface BoardHeaderProps {
     transportType: TransportTypeCode,
