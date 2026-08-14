@@ -22,10 +22,11 @@ const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
  *
  * Freshness alone is not enough to decide a cache is usable: an install that
  * already holds a recent copy would otherwise keep serving stations derived by
- * the previous algorithm until the month elapsed. Version 2 is the move from
- * listing sites to listing stations.
+ * the previous algorithm until the month elapsed. Version 2 was the move from
+ * listing sites to listing stations; version 3 drops metro platforms with no
+ * entrance, which are built but not yet open.
  */
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 
 /** Every table the cache needs; they are created together in one transaction. */
 const CACHE_TABLES = ['stop', 'stop_transport_option', 'cache_fetched_on'];

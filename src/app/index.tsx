@@ -1,8 +1,10 @@
-import { Picker } from '@react-native-picker/picker';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StatusBar, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { requestWidgetUpdate, WidgetPreview } from 'react-native-android-widget';
 
+import { SegmentedControl } from '@/components/SegmentedControl';
+import { StationPicker } from '@/components/StationPicker';
+import { radius, spacing, useTheme } from '@/components/theme';
 import { describeError } from '@/services/transport/errors';
 import {
   DepartureEntry,
@@ -13,18 +15,30 @@ import {
 import type { TransportProvider } from '@/services/transport/provider';
 import { DEFAULT_PROVIDER_ID, getProvider, getService, TRANSPORT_PROVIDERS } from '@/services/transport/registry';
 import * as Storage from '@/utils/storage';
+import { formatUpdatedAt } from '@/widgets/common';
 import { getBoard } from '@/widgets/registry';
 
-/** Providers return stops in their own order; the dropdown wants them alphabetical. */
+/** Providers return stops in their own order; the picker wants them alphabetical. */
 function byLocalisedName(locale: string) {
   return (a: StopOption, b: StopOption) => a.displayName.localeCompare(b.displayName, locale);
 }
 
+const BOARD_NAMES = [
+  // Heights are generous on purpose: the boards fill their preview, so spare
+  // room shows as background whereas too little would clip a departure row.
+  { widgetName: 'ClassicBoard', label: 'Classic', previewHeight: 130 },
+  { widgetName: 'ModernBoard', label: 'Modern', previewHeight: 205 },
+] as const;
+
 export default function Index() {
+  const theme = useTheme();
+  const scheme = useColorScheme();
+
   const [departures, setDepartures] = useState<DepartureEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   // Selections
   const [providerId, setProviderId] = useState(DEFAULT_PROVIDER_ID);
@@ -34,9 +48,12 @@ export default function Index() {
   const provider = getProvider(providerId);
   const transportOptions: TransportTypeOption[] = getService(provider).getAvailableTransportOptions();
 
-  // Previews show the selected operator's own designs.
-  const ClassicBoard = getBoard(provider.id, 'ClassicBoard');
-  const ModernBoard = getBoard(provider.id, 'ModernBoard');
+  // A transport code only means something to the provider that issued it, so
+  // this is resolved first — everything below keys off the reconciled value.
+  const effectiveTransport =
+    transportOptions.some(o => o.typeCode === transport)
+      ? transport
+      : (transportOptions[0]?.typeCode ?? '');
 
   // Both lists are tagged with what they were loaded for, so a list left over
   // from a previous selection can never be read as the current one.
@@ -45,16 +62,13 @@ export default function Index() {
     transport: TransportTypeCode;
     stops: StopOption[];
   } | null>(null);
+  // Compared against `effectiveTransport`, which is what the loader tags the
+  // list with. Comparing against the raw `transport` meant the tag could never
+  // match whenever the two differed, leaving the picker loading forever.
   const stops =
-    loadedStops?.providerId === providerId && loadedStops.transport === transport
+    loadedStops?.providerId === providerId && loadedStops.transport === effectiveTransport
       ? loadedStops.stops
       : null;
-
-  // A transport code only means something to the provider that issued it.
-  const effectiveTransport =
-    transportOptions.some(o => o.typeCode === transport)
-      ? transport
-      : (transportOptions[0]?.typeCode ?? '');
 
   // Likewise a stop code: after switching provider or transport, the saved
   // station is usually not in the new list.
@@ -143,19 +157,20 @@ export default function Index() {
         .getLiveDeparturesFromStop(currentStation, [currentTransport]);
       setDepartures(d);
 
-      const updatedAt = new Date();
+      const fetchedAt = new Date();
+      setUpdatedAt(fetchedAt);
       const boardProps = {
         stationName,
         transportType: currentTransport,
         departures: d,
         presentation: activeProvider,
-        updatedAt,
+        updatedAt: fetchedAt,
       };
 
       // Pushed in release builds too: the OS only refreshes a widget every 30
       // minutes, so without this a new selection would not reach the home screen
       // until long after it was made.
-      for (const widgetName of ['ClassicBoard', 'ModernBoard'] as const) {
+      for (const { widgetName } of BOARD_NAMES) {
         const Board = getBoard(activeProvider.id, widgetName);
         if (!Board) continue;
         requestWidgetUpdate({
@@ -188,8 +203,6 @@ export default function Index() {
     fetchDeparturesAndRefreshWidgets,
   ]);
 
-  // 6. Selection handlers. Transport and station are persisted by the effects
-  //    above, which see the reconciled values rather than the raw ones.
   const handleProviderChange = async (value: string) => {
     setProviderId(value);
     try {
@@ -199,161 +212,228 @@ export default function Index() {
     }
   };
 
+  const refresh = () => {
+    if (!effectiveStation) return;
+    fetchDeparturesAndRefreshWidgets(
+      provider, effectiveTransport, effectiveStation, currentStationLabel
+    );
+  };
+
   if (initializing) {
     return (
-      <View style={styles.container}>
-        <Text>Initializing app settings...</Text>
+      <View style={[styles.centered, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.accent} />
+        <Text style={[styles.mutedText, { color: theme.textMuted }]}>Starting up…</Text>
       </View>
     );
   }
 
+  const showingPreview = !!stops && !loading;
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.selectorWrapper}>
-        <Text style={styles.label}>Operator</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={providerId}
-            onValueChange={(itemValue) => handleProviderChange(itemValue)}
-            dropdownIconColor="#495057"
-          >
-            {TRANSPORT_PROVIDERS.map((p) => (
-              <Picker.Item key={p.id} label={p.displayName} value={p.id} />
-            ))}
-          </Picker>
-        </View>
-        <Text style={styles.label}>Transport Type</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={effectiveTransport}
-            onValueChange={(itemValue) => setTransport(itemValue)}
-            dropdownIconColor="#495057"
-          >
-            {/* Labels come from the provider, in the provider's own language. */}
-            {transportOptions.map((option) => (
-              <Picker.Item key={option.typeCode} label={option.displayName} value={option.typeCode} />
-            ))}
-          </Picker>
+    <>
+      <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
+      <ScrollView
+        style={{ backgroundColor: theme.background }}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: theme.text }]}>Departures Board</Text>
+          <Text style={[styles.subtitle, { color: theme.textMuted }]}>
+            Choose what your home screen widget shows.
+          </Text>
         </View>
 
-        <Text style={styles.label}>Station</Text>
-        <View style={styles.pickerContainer}>
-          {stops === null ? (
-            <View style={styles.pickerPlaceholder}>
-              <ActivityIndicator size="small" color="#495057" />
-              <Text style={styles.placeholderText}>Loading Stations...</Text>
-            </View>
-          ) : stops.length === 0 ? (
-            <View style={styles.pickerPlaceholder}>
-              <Text style={styles.placeholderText}>No stations found</Text>
-            </View>
-          ) : (
-            <Picker
-              selectedValue={effectiveStation}
-              onValueChange={(itemValue) => setStationCode(itemValue)}
-              dropdownIconColor="#495057"
+        {/* Errors sit above the content rather than replacing it, so the
+          * controls stay usable while something is wrong. */}
+        {error && (
+          <View style={[styles.banner, { backgroundColor: theme.dangerSurface, borderColor: theme.danger }]}>
+            <Text style={[styles.bannerText, { color: theme.danger }]}>{error}</Text>
+            <Pressable onPress={refresh} accessibilityRole="button" hitSlop={8}>
+              <Text style={[styles.bannerAction, { color: theme.danger }]}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+        {/* Always rendered, including while SL is the only registered provider:
+          * the selector is how provider switching is exercised, so hiding it
+          * would leave that path unseen until a second operator existed. */}
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: theme.textMuted }]}>OPERATOR</Text>
+          <SegmentedControl
+            segments={TRANSPORT_PROVIDERS.map(p => ({ value: p.id, label: p.displayName }))}
+            value={providerId}
+            onChange={handleProviderChange}
+            accessibilityLabel="Operator"
+          />
+        </View>
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: theme.textMuted }]}>TRANSPORT</Text>
+          {/* Labels come from the provider, in the provider's own language. */}
+          <SegmentedControl
+            segments={transportOptions.map(o => ({ value: o.typeCode, label: o.displayName }))}
+            value={effectiveTransport}
+            onChange={setTransport}
+            accessibilityLabel="Transport type"
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: theme.textMuted }]}>STATION</Text>
+          <StationPicker stops={stops} value={effectiveStation} onChange={setStationCode} />
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.previewHeader}>
+            <Text style={[styles.label, { color: theme.textMuted }]}>PREVIEW</Text>
+            <Pressable
+              onPress={refresh}
+              disabled={loading}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh departures"
+              hitSlop={8}
+              style={({ pressed }) => [{ opacity: pressed || loading ? 0.5 : 1 }]}
             >
-              {stops.map((stop) => (
-                <Picker.Item
-                  key={stop.stopCode}
-                  label={stop.displayName}
-                  value={stop.stopCode}
-                />
-              ))}
-            </Picker>
+              <Text style={[styles.refresh, { color: theme.accent }]}>
+                {loading ? 'Refreshing…' : 'Refresh'}
+              </Text>
+            </Pressable>
+          </View>
+
+          {showingPreview ? (
+            BOARD_NAMES.map(({ widgetName, label, previewHeight }) => {
+              const Board = getBoard(provider.id, widgetName);
+              if (!Board) return null;
+              return (
+                <View key={widgetName} style={styles.previewBlock}>
+                  <Text style={[styles.previewLabel, { color: theme.textMuted }]}>{label}</Text>
+                  <View style={[styles.previewFrame, { borderColor: theme.border, backgroundColor: theme.surfaceSunken }]}>
+                    <WidgetPreview
+                      renderWidget={() => (
+                        <Board
+                          stationName={currentStationLabel}
+                          transportType={effectiveTransport}
+                          departures={departures}
+                          presentation={provider}
+                          message={error ?? undefined}
+                        />
+                      )}
+                      width={320}
+                      height={previewHeight}
+                    />
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <View style={[styles.previewPlaceholder, { backgroundColor: theme.surfaceSunken, borderColor: theme.border }]}>
+              <ActivityIndicator size="small" color={theme.textMuted} />
+              <Text style={[styles.mutedText, { color: theme.textMuted }]}>Loading departures…</Text>
+            </View>
+          )}
+
+          {/* Same formatter the board header uses, so the app and the widget
+            * never disagree about what time the data was read. */}
+          {updatedAt && showingPreview && (
+            <Text style={[styles.footnote, { color: theme.textMuted }]}>
+              Updated {formatUpdatedAt(updatedAt, provider)}
+              {' · '}Tap a widget on your home screen to refresh it
+            </Text>
           )}
         </View>
-      </View>
-      {/* `stops === null` covers the gap after switching provider or transport,
-        * when the old station's departures are still in state but no longer apply. */}
-      {loading || stops === null ? (
-        <View style={styles.loadingWrapper}>
-          <Text>Loading live departures...</Text>
-        </View>
-      ) : (
-        <View style={styles.previewContainer}>
-          {ClassicBoard && (
-            <WidgetPreview
-              renderWidget={() => (
-                <ClassicBoard
-                  stationName={currentStationLabel}
-                  transportType={effectiveTransport}
-                  departures={departures}
-                  presentation={provider}
-                  message={error ?? undefined}
-                />
-              )}
-              width={320}
-              height={200}
-            />
-          )}
-          <View style={{ height: 20 }} />
-          {ModernBoard && (
-            <WidgetPreview
-              renderWidget={() => (
-                <ModernBoard
-                  stationName={currentStationLabel}
-                  transportType={effectiveTransport}
-                  departures={departures}
-                  presentation={provider}
-                  message={error ?? undefined}
-                />
-              )}
-              width={320}
-              height={200}
-            />
-          )}
-        </View>
-      )}
-    </ScrollView>
+      </ScrollView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.xxl * 2,
   },
-  selectorWrapper: {
-    width: '100%',
-    maxWidth: 340,
-    marginBottom: 30,
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+  },
+  header: {
+    marginBottom: spacing.xl,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 15,
+    marginTop: spacing.xs,
+  },
+  section: {
+    marginBottom: spacing.xl,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#495057',
-    marginBottom: 6,
-    marginTop: 12,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: spacing.sm,
   },
-  pickerContainer: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#ced4da',
-    borderRadius: 8,
-    overflow: 'hidden',
-    justifyContent: 'center',
-  },
-  pickerPlaceholder: {
+  banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    // Matches the height a Picker settles at, so the row does not jump on load.
-    height: 50,
+    gap: spacing.md,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
   },
-  placeholderText: {
-    color: '#6c757d',
+  bannerText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
   },
-  loadingWrapper: {
-    height: 420,
-    justifyContent: 'center',
+  bannerAction: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  previewHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  previewContainer: {
+  refresh: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
+  },
+  previewBlock: {
+    marginBottom: spacing.lg,
+  },
+  previewLabel: {
+    fontSize: 13,
+    marginBottom: spacing.xs,
+  },
+  previewFrame: {
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  previewPlaceholder: {
+    height: 180,
+    borderWidth: 1,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  mutedText: {
+    fontSize: 14,
+  },
+  footnote: {
+    fontSize: 12,
+    lineHeight: 17,
   },
 });

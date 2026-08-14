@@ -18,6 +18,8 @@ export type SLAPIStopAreaType = (
 
 export type SLAPIStopPoint = {
     id: number;
+    /** Whether passengers can enter here. False on platforms not yet in service. */
+    has_entrance: boolean;
     stop_area: {
         id: number,
         name: string,
