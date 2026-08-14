@@ -1,133 +1,198 @@
 import { Picker } from '@react-native-picker/picker';
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { WidgetPreview, requestWidgetUpdate } from 'react-native-android-widget';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { requestWidgetUpdate, WidgetPreview } from 'react-native-android-widget';
 
-import { AdditionalSLStopInfo, SLService } from '@/services/transport/SL/service';
-import { DepartureEntry } from '@/services/transport/genericTransportService';
+import { describeError } from '@/services/transport/errors';
+import {
+  DepartureEntry,
+  StopOption,
+  TransportTypeCode,
+  TransportTypeOption,
+} from '@/services/transport/genericTransportService';
+import type { TransportProvider } from '@/services/transport/provider';
+import { DEFAULT_PROVIDER_ID, getProvider, getService, TRANSPORT_PROVIDERS } from '@/services/transport/registry';
 import * as Storage from '@/utils/storage';
 import { ClassicBoardWidget } from '@/widgets/classicBoardWidget';
-import { TransportType } from '@/widgets/common';
 import { ModernBoardWidget } from '@/widgets/modernBoardWidget';
 
-const TRANSPORT_OPTIONS: { label: string; value: TransportType }[] = [
-  { label: 'Tunnelbana', value: 'METRO' },
-  { label: 'Pendeltåg', value: 'TRAIN' },
-];
-
-const STATION_OPTIONS: Record<string, { label: string; value: string }[]> = {
-  'METRO': [
-    { label: 'Hässelby Gård', value: '9101' },
-    { label: 'Johannelund', value: '9102' },
-    { label: 'T-Centralen', value: '9001' },
-  ],
-  'TRAIN': [
-    { label: 'Rosersberg', value: '9501' },
-    { label: 'Upplands Väsby', value: '9502' },
-    { label: 'Solna', value: '9509' },
-  ],
-};
-
-const slService = new SLService();
+/** Providers return stops in their own order; the dropdown wants them alphabetical. */
+function byLocalisedName(locale: string) {
+  return (a: StopOption, b: StopOption) => a.displayName.localeCompare(b.displayName, locale);
+}
 
 export default function Index() {
-  const [departures, setDepartures] = useState<DepartureEntry<AdditionalSLStopInfo>[]>([]);
+  const [departures, setDepartures] = useState<DepartureEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [initializing, setInitializing] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Selections
-  const [transport, setTransport] = useState<TransportType>('METRO');
-  const [stationCode, setStationCode] = useState('9101');
+  const [providerId, setProviderId] = useState(DEFAULT_PROVIDER_ID);
+  const [transport, setTransport] = useState<TransportTypeCode>('');
+  const [stationCode, setStationCode] = useState('');
 
-  // Find current label for UI display context
-  const currentStationLabel = STATION_OPTIONS[transport]?.find(s => s.value === stationCode)?.label || 'Välj station';
+  const provider = getProvider(providerId);
+  const transportOptions: TransportTypeOption[] = getService(provider).getAvailableTransportOptions();
 
-  // 1. Initialize selections on Mount
+  // Both lists are tagged with what they were loaded for, so a list left over
+  // from a previous selection can never be read as the current one.
+  const [loadedStops, setLoadedStops] = useState<{
+    providerId: string;
+    transport: TransportTypeCode;
+    stops: StopOption[];
+  } | null>(null);
+  const stops =
+    loadedStops?.providerId === providerId && loadedStops.transport === transport
+      ? loadedStops.stops
+      : null;
+
+  // A transport code only means something to the provider that issued it.
+  const effectiveTransport =
+    transportOptions.some(o => o.typeCode === transport)
+      ? transport
+      : (transportOptions[0]?.typeCode ?? '');
+
+  // Likewise a stop code: after switching provider or transport, the saved
+  // station is usually not in the new list.
+  const effectiveStation = stops?.length
+    ? (stops.some(s => s.stopCode === stationCode) ? stationCode : stops[0].stopCode)
+    : '';
+  const currentStationLabel =
+    stops?.find(s => s.stopCode === effectiveStation)?.displayName ?? '';
+
+  // 1. Restore the saved provider, then its saved selection.
   useEffect(() => {
-    async function loadSavedSelections() {
+    async function initialize() {
       try {
-        const savedTransport = await Storage.getStoredTransportType();
-        const savedStation = await Storage.getStoredStation();
-
-        if (savedTransport) setTransport(savedTransport);
-        if (savedStation) setStationCode(savedStation);
-      } catch (error) {
-        console.error("Failed to load settings from SQLite store:", error);
+        const saved = getProvider(await Storage.getStoredProviderId());
+        setProviderId(saved.id);
+        setTransport(await Storage.getStoredTransportType(saved));
+        setStationCode(await Storage.getStoredStation(saved));
+      } catch (e) {
+        console.error('Failed to restore the saved selection:', e);
+        setError(describeError(e, getProvider(null).strings.errors));
       } finally {
         setInitializing(false);
       }
     }
-    loadSavedSelections();
+    initialize();
   }, []);
 
-  // 2. Core Fetch & Widget Update Logic
-  const fetchDeparturesAndRefreshWidgets = useCallback(async (currentTransport: string, currentStation: string) => {
+  // 2. Build the provider's catalogue, then load the stations for the transport.
+  useEffect(() => {
+    if (initializing || !effectiveTransport) return;
+
+    let cancelled = false;
+    async function loadStops() {
+      try {
+        const service = getService(provider);
+        // The catalogue has to exist before any station list can be read from it.
+        await service.init();
+        const available = await service.getAvailableStops([effectiveTransport]);
+        if (cancelled) return;
+        setLoadedStops({
+          providerId: provider.id,
+          transport: effectiveTransport,
+          stops: [...available].sort(byLocalisedName(provider.locale)),
+        });
+      } catch (e) {
+        if (cancelled) return;
+        console.error('Failed to load stations:', e);
+        // Record the empty result too, so the UI stops waiting on it.
+        setLoadedStops({ providerId: provider.id, transport: effectiveTransport, stops: [] });
+        setError(describeError(e, provider.strings.errors));
+      }
+    }
+    loadStops();
+
+    return () => { cancelled = true; };
+  }, [provider, effectiveTransport, initializing]);
+
+  // 3. Keep storage in step with what is actually shown. Changing provider or
+  //    transport can move the selection on its own, and the widget reads storage
+  //    — so these are the single places each value is persisted.
+  useEffect(() => {
+    if (initializing || !effectiveTransport) return;
+    Storage.setTransportType(effectiveTransport).catch(e =>
+      console.error('Failed to persist the selected transport:', e)
+    );
+  }, [effectiveTransport, initializing]);
+
+  useEffect(() => {
+    if (initializing || !effectiveStation) return;
+    Storage.setStation(effectiveStation).catch(e =>
+      console.error('Failed to persist the selected station:', e)
+    );
+  }, [effectiveStation, initializing]);
+
+  // 4. Core Fetch & Widget Update Logic
+  const fetchDeparturesAndRefreshWidgets = useCallback(async (
+    activeProvider: TransportProvider,
+    currentTransport: TransportTypeCode,
+    currentStation: string,
+    stationName: string
+  ) => {
     setLoading(true);
+    setError(null);
     try {
-      await slService.init();
-      
-      const d = await slService.getLiveDeparturesFromStop(currentStation, [currentTransport]);
+      const d = await getService(activeProvider)
+        .getLiveDeparturesFromStop(currentStation, [currentTransport]);
       setDepartures(d);
 
-      const stationName = STATION_OPTIONS[currentTransport]?.find(s => s.value === currentStation)?.label || 'Station';
-      const transportLabel = currentTransport === 'METRO' ? 'METRO' : 'TRAIN';
+      const updatedAt = new Date();
+      const boardProps = {
+        stationName,
+        transportType: currentTransport,
+        departures: d,
+        presentation: activeProvider,
+        updatedAt,
+      };
 
-      if (__DEV__) {
-        requestWidgetUpdate({
-          widgetName: 'ClassicBoard',
-          renderWidget: () => (
-            <ClassicBoardWidget
-              stationName={stationName}
-              transportType={transportLabel}
-              departures={d}
-            />
-          ),
-        });
-        requestWidgetUpdate({
-          widgetName: 'ModernBoard',
-          renderWidget: () => (
-            <ModernBoardWidget
-              stationName={stationName}
-              transportType={transportLabel}
-              departures={d}
-            />
-          ),
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching data or updating widgets:", error);
+      // Pushed in release builds too: the OS only refreshes a widget every 30
+      // minutes, so without this a new selection would not reach the home screen
+      // until long after it was made.
+      requestWidgetUpdate({
+        widgetName: 'ClassicBoard',
+        renderWidget: () => <ClassicBoardWidget {...boardProps} />,
+      });
+      requestWidgetUpdate({
+        widgetName: 'ModernBoard',
+        renderWidget: () => <ModernBoardWidget {...boardProps} />,
+      });
+    } catch (e) {
+      console.error("Error fetching data or updating widgets:", e);
+      setDepartures([]);
+      setError(describeError(e, activeProvider.strings.errors));
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // 3. Trigger Data Fetch when selections change
+  // 5. Fetch once the selection has settled against the loaded station list.
   useEffect(() => {
-    if (initializing) return;
-    fetchDeparturesAndRefreshWidgets(transport, stationCode);
-  }, [transport, stationCode, initializing, fetchDeparturesAndRefreshWidgets]);
+    if (initializing || !stops || !effectiveStation) return;
+    fetchDeparturesAndRefreshWidgets(
+      provider, effectiveTransport, effectiveStation, currentStationLabel
+    );
+  }, [
+    provider,
+    effectiveTransport,
+    effectiveStation,
+    currentStationLabel,
+    stops,
+    initializing,
+    fetchDeparturesAndRefreshWidgets,
+  ]);
 
-  // 4. Persistence Update Handlers
-  const handleTransportChange = async (value: TransportType) => {
-    setTransport(value);
-    
-    const defaultStation = STATION_OPTIONS[value]?.[0]?.value || '';
-    setStationCode(defaultStation);
-
+  // 6. Selection handlers. Transport and station are persisted by the effects
+  //    above, which see the reconciled values rather than the raw ones.
+  const handleProviderChange = async (value: string) => {
+    setProviderId(value);
     try {
-      await Storage.setTransportType(value);
-      await Storage.setStation(defaultStation);
+      await Storage.setProviderId(value);
     } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleStationChange = async (value: string) => {
-    setStationCode(value);
-    try {
-      await Storage.setStation(value);
-    } catch (e) {
-      console.error(e);
+      console.error('Failed to persist the selected provider:', e);
     }
   };
 
@@ -142,33 +207,69 @@ export default function Index() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.selectorWrapper}>
+        {/* Only worth showing once there is a choice to make. */}
+        {TRANSPORT_PROVIDERS.length > 1 && (
+          <>
+            <Text style={styles.label}>Operator</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={providerId}
+                onValueChange={(itemValue) => handleProviderChange(itemValue)}
+                dropdownIconColor="#495057"
+              >
+                {TRANSPORT_PROVIDERS.map((p) => (
+                  <Picker.Item key={p.id} label={p.displayName} value={p.id} />
+                ))}
+              </Picker>
+            </View>
+          </>
+        )}
+
         <Text style={styles.label}>Transportmedel</Text>
         <View style={styles.pickerContainer}>
           <Picker
-            selectedValue={transport}
-            onValueChange={(itemValue) => handleTransportChange(itemValue)}
+            selectedValue={effectiveTransport}
+            onValueChange={(itemValue) => setTransport(itemValue)}
             dropdownIconColor="#495057"
           >
-            {TRANSPORT_OPTIONS.map((option) => (
-              <Picker.Item key={option.value} label={option.label} value={option.value} />
+            {/* Labels come from the provider, in the provider's own language. */}
+            {transportOptions.map((option) => (
+              <Picker.Item key={option.typeCode} label={option.displayName} value={option.typeCode} />
             ))}
           </Picker>
         </View>
 
         <Text style={styles.label}>Station</Text>
         <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={stationCode}
-            onValueChange={(itemValue) => handleStationChange(itemValue)}
-            dropdownIconColor="#495057"
-          >
-            {STATION_OPTIONS[transport]?.map((option) => (
-              <Picker.Item key={option.value} label={option.label} value={option.value} />
-            ))}
-          </Picker>
+          {stops === null ? (
+            <View style={styles.pickerPlaceholder}>
+              <ActivityIndicator size="small" color="#495057" />
+              <Text style={styles.placeholderText}>Loading Stations...</Text>
+            </View>
+          ) : stops.length === 0 ? (
+            <View style={styles.pickerPlaceholder}>
+              <Text style={styles.placeholderText}>No stations found</Text>
+            </View>
+          ) : (
+            <Picker
+              selectedValue={effectiveStation}
+              onValueChange={(itemValue) => setStationCode(itemValue)}
+              dropdownIconColor="#495057"
+            >
+              {stops.map((stop) => (
+                <Picker.Item
+                  key={stop.stopCode}
+                  label={stop.displayName}
+                  value={stop.stopCode}
+                />
+              ))}
+            </Picker>
+          )}
         </View>
       </View>
-      {loading ? (
+      {/* `stops === null` covers the gap after switching provider or transport,
+        * when the old station's departures are still in state but no longer apply. */}
+      {loading || stops === null ? (
         <View style={styles.loadingWrapper}>
           <Text>Loading live departures...</Text>
         </View>
@@ -178,8 +279,10 @@ export default function Index() {
             renderWidget={() => (
               <ClassicBoardWidget
                 stationName={currentStationLabel}
-                transportType={transport}
+                transportType={effectiveTransport}
                 departures={departures}
+                presentation={provider}
+                message={error ?? undefined}
               />
             )}
             width={320}
@@ -190,8 +293,10 @@ export default function Index() {
             renderWidget={() => (
               <ModernBoardWidget
                 stationName={currentStationLabel}
-                transportType={transport}
+                transportType={effectiveTransport}
                 departures={departures}
+                presentation={provider}
+                message={error ?? undefined}
               />
             )}
             width={320}
@@ -229,6 +334,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     justifyContent: 'center',
+  },
+  pickerPlaceholder: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    // Matches the height a Picker settles at, so the row does not jump on load.
+    height: 50,
+  },
+  placeholderText: {
+    color: '#6c757d',
   },
   loadingWrapper: {
     height: 420,

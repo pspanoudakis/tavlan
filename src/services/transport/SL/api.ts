@@ -1,4 +1,6 @@
-type SLAPISite = {
+import { TransportApiError, TransportUnreachableError } from '../errors';
+
+export type SLAPISite = {
     id: number;
     name: string;
     stop_areas: number[]
@@ -14,7 +16,7 @@ export type SLAPIStopAreaType = (
     'UNKNOWN'
 )
 
-type SLAPIStopPoint = {
+export type SLAPIStopPoint = {
     id: number;
     stop_area: {
         id: number,
@@ -23,7 +25,12 @@ type SLAPIStopPoint = {
     }
 }
 
-type SLAPITransportMode = (
+/**
+ * Transport modes as SL's API spells them. Note that commuter rail is `TRAIN`
+ * here, while our canonical code for it is `COMMUTER` — see
+ * `SLService.toAPITransportMode`.
+ */
+export type SLAPITransportMode = (
     'BUS' |
     'TRAM' |
     'METRO' |
@@ -41,6 +48,10 @@ type SLAPIDeparture = {
     destination: string,
     display: string,
     expected: string,
+    // Unique per scheduled train run, so it is stable enough to key a rendered row.
+    journey: {
+        id: number
+    },
     line: {
         id: number,
         transport_mode: SLAPITransportMode
@@ -54,29 +65,40 @@ function getAPIEndpoint(relativeEndpoint: string) : string {
 async function fetchDataFromSLApi<R>(relativeEndpoint: string): Promise<R>;
 async function fetchDataFromSLApi<R, T>(relativeEndpoint: string, mapper: (response: R) => T): Promise<T>;
 async function fetchDataFromSLApi<R, T>(relativeEndpoint: string, mapper?: (response: R) => T): Promise<R | T> {
+    // Only reaching the API and reading its bytes count as transport failures.
+    let res: Response;
+    let rawBody: string;
     try {
-        const res = await fetch(getAPIEndpoint(relativeEndpoint));
-        try {
-            console.log(res);
-            const resJson = await res.json() as R;
-            try {
-                if (!res.ok) {
-                    console.error(`Error returned by SL API: `, resJson);
-                    return Promise.reject((resJson as any).description);
-                }
-                return mapper?.(resJson) ?? resJson;
-            } catch (e) {
-                console.error(`Error while mapping response`, e);
-                return Promise.reject(e);
-            }
-        } catch (e) {
-            console.error(`Error while parsing SL data as JSON`, e);
-            return Promise.reject(e);
-        }
+        res = await fetch(getAPIEndpoint(relativeEndpoint));
+        rawBody = await res.text();
     } catch (e) {
-        console.error(`Error while fetching SL data.`, e);
-        return Promise.reject(e);
+        throw new TransportUnreachableError(e);
     }
+
+    // Parsed leniently, because SL answers some rejections with invalid JSON —
+    // a malformed stop id comes back as `{"message": 400 Bad requst ...}`. The
+    // status is therefore more trustworthy than the body.
+    let body: unknown;
+    try {
+        body = JSON.parse(rawBody);
+    } catch {
+        body = undefined;
+    }
+
+    if (!res.ok) {
+        // SL describes its rejections in a `description` field; fall back to
+        // whatever it did send when the body is not the expected shape.
+        const description =
+            (body as { description?: string } | undefined)?.description ??
+            (rawBody.trim() || res.statusText || 'unknown error');
+        throw new TransportApiError(res.status, description);
+    }
+
+    if (body === undefined) {
+        throw new TransportApiError(res.status, `unreadable response body: ${rawBody.slice(0, 120)}`);
+    }
+
+    return mapper ? mapper(body as R) : (body as R);
 }
 
 export async function fetchSLSites() {
@@ -88,9 +110,11 @@ export async function fetchSLStopPoints() {
 }
 
 export async function fetchSiteDepartures<T>(
-    siteId: string, transportType: string, mapper: (response: SLAPISiteDeparturesResponse) => T
+    siteId: string,
+    transportMode: SLAPITransportMode,
+    mapper: (response: SLAPISiteDeparturesResponse) => T
 ) {
     return await fetchDataFromSLApi<SLAPISiteDeparturesResponse, T>(
-        `sites/${siteId}/departures?transport=${transportType}`, mapper
+        `sites/${encodeURIComponent(siteId)}/departures?transport=${transportMode}`, mapper
     );
 }

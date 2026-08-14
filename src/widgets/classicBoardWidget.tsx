@@ -1,18 +1,29 @@
 'use no memo';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
 import { BoardHeader } from './boardHeader';
-import { BoardProps } from './common';
+import { BoardProps, formatCountdown, REFRESH_CLICK_ACTION } from './common';
 
 export function ClassicBoard({
     transportType,
     stationName,
     departures,
+    presentation,
+    message,
+    updatedAt,
 }: BoardProps) {
+    const visibleDepartures = departures.slice(0, 2);
+
     return (
-        <FlexWidget style={styles.flexContainer}>
+        <FlexWidget
+            style={styles.flexContainer}
+            clickAction={REFRESH_CLICK_ACTION}
+            accessibilityLabel={presentation.strings.refreshHint(stationName)}
+        >
             <BoardHeader
                 stationName={stationName}
                 transportType={transportType}
+                presentation={presentation}
+                updatedAt={updatedAt}
             />
             <FlexWidget
                 style={{
@@ -20,43 +31,45 @@ export function ClassicBoard({
                     paddingHorizontal: 12,
                 }}
             >
-                {departures.slice(0, 2).map(d => {
-                    const minutesUntilDeparture = Math.ceil(d.departsInMillis / (1000 * 60));
+                {message || !visibleDepartures.length ? (
+                    <TextWidget
+                        text={message ?? presentation.strings.noDepartures}
+                        style={styles.pixelizedText}
+                    />
+                ) : visibleDepartures.map(d => {
                     return (
                         <FlexWidget
-                            key={d.lineCode}
+                            key={d.id}
                             style={{
                                 width: 'match_parent',
                                 flexDirection: 'row',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                        }}
-                    >
-                        <FlexWidget
-                            style={{
-                                flexDirection: 'row',
+                                justifyContent: 'space-between',
                                 alignItems: 'center',
-                                flexGap: 16,
                             }}
                         >
+                            <FlexWidget
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    flexGap: 16,
+                                }}
+                            >
+                                <TextWidget
+                                    text={d.lineCode}
+                                    style={styles.pixelizedText}
+                                />
+                                <TextWidget
+                                    text={d.destination}
+                                    style={styles.pixelizedText}
+                                />
+                            </FlexWidget>
                             <TextWidget
-                                text={d.lineCode}
-                                style={styles.pixelizedText}
-                            />
-                            <TextWidget
-                                text={d.destination}
+                                text={formatCountdown(d.departsInMillis, presentation)}
                                 style={styles.pixelizedText}
                             />
                         </FlexWidget>
-                        <TextWidget
-                            text={
-                                minutesUntilDeparture ?
-                                `${minutesUntilDeparture} min` : 'Nu'
-                            }
-                            style={styles.pixelizedText}
-                        />
-                    </FlexWidget>
-                )})}
+                    )
+                })}
             </FlexWidget>
         </FlexWidget>
     )
@@ -84,17 +97,4 @@ const styles = {
         textShadowRadius: 5,
         textShadowOffset: { width: 0, height: 0 },
     },
-    headerText: {
-        fontSize: 12,
-        fontFamily: 'FiraSansCondensed-Regular',
-        color: '#ffffff',
-    },
 } as const;
-
-// In development, automatically update the home screen widget on Fast Refresh
-// if (__DEV__) {
-//   requestWidgetUpdate({
-//     widgetName: 'ClassicBoard',
-//     renderWidget: () => <ClassicBoardWidget />,
-//   });
-// }

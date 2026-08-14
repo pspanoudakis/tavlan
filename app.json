@@ -53,7 +53,7 @@
               "targetCellHeight": 1,
               "description": "A Classic Departures Board",
               "previewImage": "./assets/images/icon.png",
-              "updatePeriodMillis": 20000,
+              "updatePeriodMillis": 1800000,
               "resizeMode": "vertical"
             },
             {
@@ -65,7 +65,7 @@
               "targetCellHeight": 1,
               "description": "A Modern Departures Board",
               "previewImage": "./assets/images/icon.png",
-              "updatePeriodMillis": 20000,
+              "updatePeriodMillis": 1800000,
               "resizeMode": "vertical"
             }
           ]

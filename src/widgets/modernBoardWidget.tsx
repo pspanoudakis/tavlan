@@ -1,20 +1,29 @@
 'use no memo';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
 import { BoardHeader } from './boardHeader';
-import { BoardProps } from './common';
+import { BoardProps, formatCountdown, REFRESH_CLICK_ACTION } from './common';
 
 export function ModernBoard({
     stationName,
     transportType,
-    departures
+    departures,
+    presentation,
+    message,
+    updatedAt,
 }: BoardProps) {
     const visibleDepartures = departures.slice(0, 4);
 
     return (
-        <FlexWidget style={styles.flexContainer}>
+        <FlexWidget
+            style={styles.flexContainer}
+            clickAction={REFRESH_CLICK_ACTION}
+            accessibilityLabel={presentation.strings.refreshHint(stationName)}
+        >
             <BoardHeader
                 stationName={stationName}
                 transportType={transportType}
+                presentation={presentation}
+                updatedAt={updatedAt}
             />
             <FlexWidget
                 style={{
@@ -23,60 +32,62 @@ export function ModernBoard({
                     paddingVertical: 4
                 }}
             >
-                {visibleDepartures.map((d, index) => {
-                    const minutesUntilDeparture = Math.ceil(d.departsInMillis / (1000 * 60));
+                {message || !visibleDepartures.length ? (
+                    <TextWidget
+                        text={message ?? presentation.strings.noDepartures}
+                        style={styles.modernText}
+                    />
+                ) : visibleDepartures.map((d, index) => {
                     return (
                         <FlexWidget
-                            key={d.lineCode}
+                            key={d.id}
                             style={{
                                 ...styles.row,
                                 ...(index < visibleDepartures.length - 1
-                                ? styles.rowWithDivider
-                                : {}),
-                        }}
-                    >
-                        <FlexWidget
-                            style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                flexGap: 8,
+                                    ? styles.rowWithDivider
+                                    : {}),
                             }}
                         >
                             <FlexWidget
                                 style={{
-                                    backgroundColor: d.additionalInfo.lineColor,
-                                    borderRadius: 4,
-                                    paddingHorizontal: 11,
-                                    paddingBottom: 2,
-                                    justifyContent: 'center',
-                                    alignItems: 'center'
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    flexGap: 8,
                                 }}
                             >
+                                <FlexWidget
+                                    style={{
+                                        backgroundColor: d.lineColor,
+                                        borderRadius: 4,
+                                        paddingHorizontal: 11,
+                                        paddingBottom: 2,
+                                        justifyContent: 'center',
+                                        alignItems: 'center'
+                                    }}
+                                >
+                                    <TextWidget
+                                        text={d.lineCode}
+                                        style={{
+                                            ...styles.modernText,
+                                            fontSize: 14
+                                        }}
+                                    />
+                                </FlexWidget>
                                 <TextWidget
-                                    text={d.lineCode}
+                                    text={d.destination}
                                     style={{
                                         ...styles.modernText,
-                                        fontSize: 14
+                                        marginBottom: 1
                                     }}
                                 />
                             </FlexWidget>
                             <TextWidget
-                                text={d.destination}
-                                style={{
-                                    ...styles.modernText,
-                                    marginBottom: 1
-                                }}
+                                text={formatCountdown(d.departsInMillis, presentation)}
+                                style={styles.modernText}
                             />
                         </FlexWidget>
-                        <TextWidget
-                            text={
-                                minutesUntilDeparture ?
-                                `${minutesUntilDeparture} min` : 'Nu'
-                            }
-                            style={styles.modernText}
-                        />
-                    </FlexWidget>
-                )})}
+                    )
+                })}
             </FlexWidget>
         </FlexWidget>
     )
@@ -84,11 +95,6 @@ export function ModernBoard({
 
 export function ModernBoardWidget(props: BoardProps) {
     return (
-        // <ModernBoard
-        //     stationName={sampleData.stationName}
-        //     transportType={sampleData.transportType}
-        //     departures={sampleData.departures}
-        // />
         <ModernBoard {...props}/>
     );
 }
@@ -122,11 +128,3 @@ const styles = {
         marginBottom: 6,
     },
 } as const;
-
-// In development, automatically update the home screen widget on Fast Refresh
-// if (__DEV__) {
-//   requestWidgetUpdate({
-//     widgetName: 'ModernBoard',
-//     renderWidget: () => <ModernBoardWidget />,
-//   });
-// }
