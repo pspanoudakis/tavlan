@@ -1,7 +1,24 @@
 'use no memo';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
 import { BoardHeader } from './boardHeader';
-import { BoardProps, formatCountdown, REFRESH_CLICK_ACTION } from '../common';
+import { BoardFit, BoardProps, departuresThatFit, formatCountdown, REFRESH_CLICK_ACTION } from '../common';
+
+/**
+ * Heights in dp, for working out how many rows a resize leaves room for.
+ * They describe this board specifically — the modern board is laid out
+ * differently and carries its own numbers.
+ */
+const FIT: BoardFit = {
+    // Header row: 31dp of Jersey 10 plus its 2dp bottom rule.
+    chromeHeight: 24,
+    // One line of 31dp text at the default line spacing. Rounded up: showing 5
+    // rows in 216dp on the device puts the true height at or under 38dp.
+    rowHeight: 37,
+    min: 2,
+    // Not a design limit but a sanity bound. This launcher ignores
+    // `maxResizeHeight`, so the board has to fill whatever height it is handed.
+    max: 10,
+};
 
 export function ClassicBoard({
     transportType,
@@ -10,8 +27,9 @@ export function ClassicBoard({
     presentation,
     message,
     updatedAt,
+    heightDp,
 }: BoardProps) {
-    const visibleDepartures = departures.slice(0, 2);
+    const visibleDepartures = departures.slice(0, departuresThatFit(heightDp, FIT));
 
     return (
         <FlexWidget

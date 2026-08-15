@@ -37,6 +37,15 @@
         }
       ],
       [
+        "./plugins/withWidgetMinResizeHeight",
+        {
+          "widgets": {
+            "ClassicBoard": "70dp",
+            "ModernBoard": "70dp"
+          }
+        }
+      ],
+      [
         "react-native-android-widget",
         {
           "fonts": [
@@ -48,9 +57,10 @@
               "name": "ClassicBoard",
               "label": "Classic Departures Board",
               "minWidth": "320dp",
-              "minHeight": "60dp",
+              "minHeight": "70dp",
+              "maxResizeHeight": "216dp",
               "targetCellWidth": 4,
-              "targetCellHeight": 1,
+              "targetCellHeight": 2,
               "description": "A Classic Departures Board",
               "previewImage": "./assets/images/icon.png",
               "updatePeriodMillis": 1800000,
@@ -60,9 +70,10 @@
               "name": "ModernBoard",
               "label": "Modern Departures Board",
               "minWidth": "320dp",
-              "minHeight": "100dp",
+              "minHeight": "70dp",
+              "maxResizeHeight": "216dp",
               "targetCellWidth": 4,
-              "targetCellHeight": 1,
+              "targetCellHeight": 2,
               "description": "A Modern Departures Board",
               "previewImage": "./assets/images/icon.png",
               "updatePeriodMillis": 1800000,

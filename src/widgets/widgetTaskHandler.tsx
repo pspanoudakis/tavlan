@@ -101,5 +101,7 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     board = await describeFailure(provider, error);
   }
 
-  props.renderWidget(<Board {...board} />);
+  // The height arrives with every action, including WIDGET_RESIZED, which is how
+  // stretching the widget turns into more departure rows.
+  props.renderWidget(<Board {...board} heightDp={widgetInfo.height} />);
 }

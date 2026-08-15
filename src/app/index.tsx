@@ -179,7 +179,9 @@ export default function Index() {
         if (!Board) continue;
         requestWidgetUpdate({
           widgetName,
-          renderWidget: () => <Board {...boardProps} />,
+          // Called once per placed widget, so each gets its own height and
+          // renders the number of rows that actually fits it.
+          renderWidget: info => <Board {...boardProps} heightDp={info.height} />,
         });
       }
     } catch (e) {
@@ -336,6 +338,9 @@ export default function Index() {
                           departures={departures}
                           presentation={provider}
                           message={error ?? undefined}
+                          // The preview is the board at this exact height, so it
+                          // shows the row count that height really produces.
+                          heightDp={previewHeight}
                         />
                       )}
                       width={320}
