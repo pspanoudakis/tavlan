@@ -149,10 +149,10 @@ This separation keeps the widget layer focused on display while service logic ha
 
 Tavlan is based on product-oriented mobile engineering:
 
-- It is built around a real user scenario: checking departures in seconds
-- It balances app and widget UX instead of treating them as separate concerns
-- It demonstrates abstractions that make adding new providers or board styles straightforward
-- It shows how technical design can support a clean, polished user experience
+- Is built around a real user scenario: checking departures in seconds
+- Balances app and widget UX instead of treating them as separate concerns
+- Includes abstractions aiming to make adding new providers or board styles straightforward
+- Leverages technical design to implement a polished user experience
 
 ## Run locally
 
