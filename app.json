@@ -37,6 +37,15 @@
         }
       ],
       [
+        "./plugins/withWidgetMinResizeHeight",
+        {
+          "widgets": {
+            "ClassicBoard": "70dp",
+            "ModernBoard": "70dp"
+          }
+        }
+      ],
+      [
         "react-native-android-widget",
         {
           "fonts": [
@@ -46,29 +55,34 @@
           "widgets": [
             {
               "name": "ClassicBoard",
-              "label": "Classic Departures Board",
+              "label": "SL - Classic Departures Board",
               "minWidth": "320dp",
-              "minHeight": "60dp",
+              "minHeight": "70dp",
+              "maxResizeHeight": "216dp",
               "targetCellWidth": 4,
-              "targetCellHeight": 1,
-              "description": "A Classic Departures Board",
-              "previewImage": "./assets/images/icon.png",
-              "updatePeriodMillis": 20000
+              "targetCellHeight": 2,
+              "description": "A Classic SL Departures Board",
+              "previewImage": "./assets/images/sl_classic.png",
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "vertical"
             },
             {
               "name": "ModernBoard",
-              "label": "Modern Departures Board",
+              "label": "SL - Modern Departures Board",
               "minWidth": "320dp",
-              "minHeight": "100dp",
+              "minHeight": "70dp",
+              "maxResizeHeight": "216dp",
               "targetCellWidth": 4,
-              "targetCellHeight": 1,
-              "description": "A Modern Departures Board",
-              "previewImage": "./assets/images/icon.png",
-              "updatePeriodMillis": 20000
+              "targetCellHeight": 2,
+              "description": "A Modern SL Departures Board",
+              "previewImage": "./assets/images/sl_modern.png",
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "vertical"
             }
           ]
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
