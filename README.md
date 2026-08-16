@@ -1,10 +1,12 @@
-# Departures Board Widget
+# Tavlan
+
+*Swedish <img src="https://flagcdn.com/24x18/se.png" alt="Sweden" width="18" /> for "the board"*
 
 An Android home-screen widget experience for live public transport departures, built with Expo and React Native. This project turns real-time departure data into a glanceable, home-screen-first interface for commuters in Stockholm, with provider-aware board styling and a compact configuration app.
 
 ## Overview
 
-The app lets a user choose a transit provider, station, and transport type, then displays current departures in a widget-friendly layout. It currently includes two custom Android widget variants:
+Tavlan lets a user choose a transit provider, station, and transport type, then displays current departures in a widget-friendly layout. It currently includes two custom Android widget variants:
 
 - SL "Classic" board
 - SL "Modern" board
@@ -32,7 +34,7 @@ This project was built to explore the intersection of:
 
 ## SL departure board widgets
 
-For the SL provider, the project supports two branded widget styles: a classic board and a modern board. Both are resizeable and tuned for the commuter experience, with a station header that reflects the current line type such as T-Bana or Pendeltåg.
+For the SL provider, Tavlan supports two branded widget styles: a classic board and a modern board. Both are resizeable and tuned for the commuter experience, with a station header that reflects the current line type such as T-Bana or Pendeltåg.
 
 ### Classic SL board
 
@@ -145,7 +147,7 @@ This separation keeps the widget layer focused on display while service logic ha
 
 ## Product notes
 
-This project is a strong demonstration of product-oriented mobile engineering:
+Tavlan is based on product-oriented mobile engineering:
 
 - It is built around a real user scenario: checking departures in seconds
 - It balances app and widget UX instead of treating them as separate concerns

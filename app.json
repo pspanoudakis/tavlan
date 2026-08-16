@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "departures-board-widget",
+    "name": "Tavlan",
     "slug": "departures-board-widget",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "departuresboardwidget",
+    "scheme": "tavlan",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
@@ -18,7 +18,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.departuresboardwidget"
+      "package": "com.anonymous.tavlan"
     },
     "web": {
       "output": "static",
@@ -29,10 +29,10 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#0B0730",
           "android": {
             "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
+            "imageWidth": 250
           }
         }
       ],
@@ -87,6 +87,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7bbd059a-280c-484e-abf6-c6822ffcdb41"
+      }
+    },
+    "owner": "pavlos_spn"
   }
 }

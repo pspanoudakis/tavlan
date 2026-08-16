@@ -1,5 +1,5 @@
 {
-  "name": "departures-board-widget",
+  "name": "tavlan",
   "main": "src/index.ts",
   "version": "1.0.0",
   "dependencies": {

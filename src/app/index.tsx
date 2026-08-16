@@ -249,9 +249,13 @@ export default function Index() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.text }]}>Departures Board</Text>
+          <Text style={[styles.title, { color: theme.text }]}>Tavlan</Text>
           <Text style={[styles.subtitle, { color: theme.textMuted }]}>
-            Choose what your home screen widget shows.
+            Swedish for "the board"
+          </Text>
+          <Text style={[styles.subtitle, { color: theme.textMuted }]}>
+            Live departure boards for your stop, right on your home screen.
+            Choose what your widget shows below.          
           </Text>
         </View>
 
