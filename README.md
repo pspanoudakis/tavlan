@@ -68,34 +68,41 @@ The board adapts to different widget heights and widths without losing legibilit
 
 These screenshots show the same SL board family at different heights and densities, demonstrating how the layouts remain usable as the widget grows or shrinks.
 
-   <div style="display: flex; flex-direction: row; column-gap: 5px">
-      <div style="display: flex; flex-direction: column; width: 48%; row-gap: 10px;">
-         <img src="./assets/images/t-bana-modern-small.png" alt="Modern SL board at a small size" />
-         <img src="./assets/images/sj-modern-mid.png" alt="Modern SL board at a medium size" />
-         <img src="./assets/images/t-bana-modern-big.png" alt="Modern SL board at a larger size" />
-      </div>
-      <div style="display: flex; flex-direction: column; width: 48%; row-gap: 10px;">
-         <img src="./assets/images/t-bana-classic-small.png" alt="Modern SL board at a small size" />
-         <img src="./assets/images/sj-classic-mid.png" alt="Modern SL board at a medium size" />
-         <img src="./assets/images/t-bana-classic-big.png" alt="Modern SL board at a larger size" />
-      </div>
-   </div>
+   <table>
+      <tr>
+         <td width="50%" valign="top">
+            <img src="./assets/images/t-bana-modern-small.png" width="100%" alt="Modern SL board at a small size" /><br/>
+            <img src="./assets/images/sj-modern-mid.png" width="100%" alt="Modern SL board at a medium size" /><br/>
+            <img src="./assets/images/t-bana-modern-big.png" width="100%" alt="Modern SL board at a larger size" />
+         </td>
+         <td width="50%" valign="top">
+            <img src="./assets/images/t-bana-classic-small.png" width="100%" alt="Classic SL board at a small size" /><br/>
+            <img src="./assets/images/sj-classic-mid.png" width="100%" alt="Classic SL board at a medium size" /><br/>
+            <img src="./assets/images/t-bana-classic-big.png" width="100%" alt="Classic SL board at a larger size" />
+         </td>
+      </tr>
+   </table>
 
 The practical result is a widget system that feels native to Android: compact enough for quick glanceability, but still rich enough to surface multiple departures and destination names when more space is available.
 
 ## In-App features for widget configuration
 
-### Transport Provider / Type / Station configurator
-
-![](./assets/images/home.jpg)
-
-### Station Selection
-
-![](./assets/images/stations.jpg)
-
-### Widget Preview
-
-![](./assets/images/preview.jpg)
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="./assets/images/home.jpg" width="100%" alt="Transport provider / type / station configurator" /><br/>
+      <sub>Transport Provider / Type / Station configurator</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="./assets/images/stations.jpg" width="100%" alt="Station selection screen" /><br/>
+      <sub>Station selection</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="./assets/images/preview.jpg" width="100%" alt="Widget preview screen" /><br/>
+      <sub>Widget preview</sub>
+    </td>
+  </tr>
+</table>
 
 ## Tech stack
 
@@ -179,19 +186,3 @@ npm run android
 npm run web
 npm run lint
 ```
-
-## Future improvements
-
-- Add support for additional transport providers
-- Add richer error recovery and offline states
-- Add a premium/high-contrast widget mode
-- Add automated tests around provider logic and widget rendering
-- Capture final screenshots and demo videos for portfolio publishing
-
-## Portfolio summary
-
-This project demonstrates a practical mobile product built to solve a daily-use problem with a strong home-screen presence. It combines data fetching, native widget integration, and polished UX into one cohesive experience—an ideal example of engineering work that feels useful beyond the app itself.
-
----
-
-If you want, this README can be adapted for a more minimal "GitHub project" tone or a more premium portfolio style with a stronger personal brand and achievement framing.
