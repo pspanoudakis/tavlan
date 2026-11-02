@@ -41,7 +41,8 @@ export abstract class GenericTransportService<AdditionalDepartureInfo = unknown>
 
     /**
      * Prepares whatever local state the service needs — typically a cached stop
-     * catalogue — and must be awaited before anything else is called.
+     * catalogue — and must be awaited before anything else is called. Whatever
+     * does not depend on that state is still safe to call if this rejects.
      * Providers with nothing to prepare inherit this no-op.
      */
     public async init(): Promise<void> {}

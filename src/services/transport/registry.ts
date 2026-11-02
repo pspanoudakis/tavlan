@@ -22,8 +22,9 @@ export function getProvider(id: string | null | undefined): TransportProvider {
     return byId.get(DEFAULT_PROVIDER_ID)!;
 }
 
-// Services hold a cached database handle, so one instance per provider is reused
-// rather than rebuilt on every widget update.
+// Services track work in progress, such as a catalogue rebuild that concurrent
+// widget updates share, so one instance per provider is reused rather than
+// recreated on every update.
 const services = new Map<string, GenericTransportService<unknown>>();
 
 export function getService(provider: TransportProvider): GenericTransportService<unknown> {

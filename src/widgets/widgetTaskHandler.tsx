@@ -1,4 +1,4 @@
-import { describeError, messageOf } from '@/services/transport/errors';
+import { TransportUnreachableError, describeError, messageOf } from '@/services/transport/errors';
 import type { TransportProvider } from '@/services/transport/provider';
 import { getProvider, getService } from '@/services/transport/registry';
 import * as Storage from '@/utils/storage';
@@ -18,13 +18,15 @@ async function loadBoard(provider: TransportProvider): Promise<BoardProps> {
   const transportType = await Storage.getStoredTransportType(provider);
   const stopCode = await Storage.getStoredStation(provider);
 
+  // The name is decoration, and the only thing the stop cache is needed for here;
+  // a board with real departures should still render if only the cache goes wrong.
   const service = getService(provider);
-  await service.init();
+  await service.init().catch(e => {
+    console.warn('[departures-widget] could not prepare stop cache:', messageOf(e));
+  });
 
   const [departures, stationName] = await Promise.all([
     service.getLiveDeparturesFromStop(stopCode, [transportType]),
-    // The name is decoration; a board with real departures should still render
-    // if only the cache lookup goes wrong.
     service.getStopNameByCode(stopCode).catch(e => {
       console.warn('[departures-widget] could not resolve stop name:', messageOf(e));
       return undefined;
@@ -98,6 +100,12 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
   try {
     board = await loadBoard(provider);
   } catch (error) {
+    // Android can block the network during an automatic refresh, and nobody asked
+    // for this one. The last board stays up, and its header shows how old it is.
+    if (props.widgetAction === 'WIDGET_UPDATE' && error instanceof TransportUnreachableError) {
+      console.warn('[departures-widget] keeping last board:', messageOf(error));
+      return;
+    }
     board = await describeFailure(provider, error);
   }
 

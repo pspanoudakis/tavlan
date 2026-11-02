@@ -1,10 +1,14 @@
-import * as SQLite from 'expo-sqlite';
+import type * as SQLite from 'expo-sqlite';
+import { ManagedDatabase } from '@/utils/managedDatabase';
 import { StopCacheError, StopNotConfiguredError, TransportApiError, TransportUnreachableError } from '../errors';
 import { DepartureEntry, GenericTransportService, LineColor, StopOption, TransportTypeCode, TransportTypeOption } from "../genericTransportService";
 import { fetchSiteDepartures, fetchSLSites, fetchSLStopPoints, SLAPITransportMode } from './api';
 import { buildStationList, SLServiceTransportType } from './stations';
 
 const SL_STOPS_CACHE_DB = 'SL_STOPS_CACHE';
+
+/** Shared by every query and the cache rebuild. */
+const stopsDb = new ManagedDatabase(SL_STOPS_CACHE_DB);
 
 /**
  * SL publishes its timetable in Stockholm wall-clock time with no offset, so the
@@ -31,6 +35,12 @@ const CACHE_VERSION = 3;
 /** Every table the cache needs; they are created together in one transaction. */
 const CACHE_TABLES = ['stop', 'stop_transport_option', 'cache_fetched_on'];
 
+/**
+ * What a cache is good for: `stale` is an old but intact copy, which is still
+ * worth serving, whereas `unusable` has nothing that can be read.
+ */
+type CacheState = 'fresh' | 'stale' | 'unusable';
+
 export type AdditionalSLStopInfo = {
     isShortTrain?: boolean,
     serviceInfo: string
@@ -45,60 +55,72 @@ const mainLineColors: {[s: string]: LineColor} = {
 }
 
 export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
-   static  _db: SQLite.SQLiteDatabase | undefined = undefined;
+    /** The rebuild in progress, so that concurrent widget updates share one. */
+    private rebuilding: Promise<void> | null = null;
 
     constructor() {
         super();
     }
 
     public async init() {
-        if (await this.hasFreshCache()) return;
-        await this.rebuildCache();
+        const state = await this.inspectCache();
+        if (state === 'fresh') return;
+
+        const rebuild = this.rebuilding ??= this.rebuildCache().finally(() => {
+            this.rebuilding = null;
+        });
+
+        if (state === 'unusable') {
+            await rebuild;
+            return;
+        }
+
+        // Downloading the catalogue takes long enough to use up a widget task's
+        // 30 seconds, and an old copy of it is nearly always still correct.
+        rebuild.catch(e => console.warn('SL stop cache could not be refreshed; keeping the old copy.', e));
     }
 
     /**
-     * Whether the cached stop catalogue can be reused as-is. Runs on every widget
-     * update, so it stays to cheap metadata lookups rather than reading the
-     * catalogue itself.
+     * Runs on every widget update, so it stays to cheap metadata lookups rather
+     * than reading the catalogue itself.
      */
-    private async hasFreshCache(): Promise<boolean> {
+    private async inspectCache(): Promise<CacheState> {
         try {
-            // Cheapest check first, and the only one that survives a schema change:
-            // `user_version` is 0 on any cache written before versioning existed.
-            const db = await SLService.getDb();
-            const version = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
-            if ((version?.user_version ?? 0) !== CACHE_VERSION) {
-                console.log(
-                    `SL stop cache is version ${version?.user_version ?? 0}, expected ${CACHE_VERSION}; rebuilding.`
+            return await stopsDb.run(async db => {
+                // Cheapest check first, and the only one that survives a schema change:
+                // `user_version` is 0 on any cache written before versioning existed.
+                const version = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
+                if ((version?.user_version ?? 0) !== CACHE_VERSION) {
+                    console.log(
+                        `SL stop cache is version ${version?.user_version ?? 0}, expected ${CACHE_VERSION}; rebuilding.`
+                    );
+                    return 'unusable';
+                }
+
+                const placeholders = CACHE_TABLES.map((_, i) => `$table${i}`).join(', ');
+                const tables = await db.getAllAsync<{ name: string }>(
+                    `SELECT name FROM sqlite_master WHERE type='table' AND name IN (${placeholders})`,
+                    Object.fromEntries(CACHE_TABLES.map((t, i) => [`$table${i}`, t]))
                 );
-                return false;
-            }
+                // A partially built cache is unusable; rebuild rather than query into it.
+                if (tables.length < CACHE_TABLES.length) return 'unusable';
 
-            const placeholders = CACHE_TABLES.map((_, i) => `$table${i}`).join(', ');
-            const tables = await this.runCacheDBQuery<{ name: string }>(
-                `SELECT name FROM sqlite_master WHERE type='table' AND name IN (${placeholders})`,
-                Object.fromEntries(CACHE_TABLES.map((t, i) => [`$table${i}`, t]))
-            );
-            // A partially built cache is unusable; rebuild rather than query into it.
-            if (tables.length < CACHE_TABLES.length) return false;
+                const anyStop = await db.getFirstAsync<{ present: number }>(
+                    'SELECT 1 AS present FROM stop LIMIT 1'
+                );
+                if (!anyStop) return 'unusable';
 
-            const [fetched] = await this.runCacheDBQuery<{ fetchedOn: string }>(
-                'SELECT fetchedOn FROM cache_fetched_on'
-            );
-            if (!fetched?.fetchedOn) return false;
-
-            // A negative age means the clock moved backwards; treat that as stale too.
-            const age = Date.now() - new Date(fetched.fetchedOn).getTime();
-            if (Number.isNaN(age) || age < 0 || age > CACHE_MAX_AGE_MS) return false;
-
-            const [anyStop] = await this.runCacheDBQuery<{ present: number }>(
-                'SELECT 1 AS present FROM stop LIMIT 1'
-            );
-            return !!anyStop;
+                const fetched = await db.getFirstAsync<{ fetchedOn: string }>(
+                    'SELECT fetchedOn FROM cache_fetched_on'
+                );
+                // A negative age means the clock moved backwards; treat that as stale too.
+                const age = Date.now() - new Date(fetched?.fetchedOn ?? NaN).getTime();
+                return Number.isNaN(age) || age < 0 || age > CACHE_MAX_AGE_MS ? 'stale' : 'fresh';
+            });
         } catch (e) {
             // An unreadable cache is not fatal on its own — rebuilding may fix it.
             console.warn('SL stop cache could not be inspected, rebuilding.', e);
-            return false;
+            return 'unusable';
         }
     }
 
@@ -106,18 +128,37 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
         try {
             console.log('re-initializing DB...')
             const fetchedOn = new Date();
+            // Not inside `stopsDb.run`: that would hold up every query on the
+            // connection for as long as this download takes.
             const [sitesRes, stopAreasRes] = await Promise.all([
                 fetchSLSites(), fetchSLStopPoints()
             ]);
 
             const stopOptions = buildStationList(sitesRes, stopAreasRes);
 
+            try {
+                await this.writeCache(stopOptions, fetchedOn);
+            } catch (e) {
+                // This already failed on a fresh connection, so the file itself is
+                // suspect — and being a cache, it can simply be thrown away.
+                console.warn('SL stop cache could not be written, recreating the file.', e);
+                await stopsDb.destroy();
+                await this.writeCache(stopOptions, fetchedOn);
+            }
+            console.log(`SL stop cache rebuilt: ${stopOptions.length} stations (version ${CACHE_VERSION}).`);
 
-            // Reuse the shared handle: opening a second connection here meant one
-            // connection ran DDL while the other held the old schema cached.
-            const db = await SLService.getDb();
+        } catch (e) {
+            console.error(`Error while initializing SL Service.`, e);
+            // A failed fetch is the caller's to describe; only wrap real cache faults.
+            if (e instanceof TransportApiError || e instanceof TransportUnreachableError) throw e;
+            throw new StopCacheError('rebuild', e);
+        }
+    }
+
+    private writeCache(stopOptions: StopOption[], fetchedOn: Date) {
+        return stopsDb.run(db =>
             // Execute everything inside a single unified transaction
-            await db.withTransactionAsync(async () => {
+            db.withTransactionAsync(async () => {
                 // Bulk drop and create tables safely
                 await db.execAsync(`
                     DROP TABLE IF EXISTS stop;
@@ -142,7 +183,7 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
                     // Sequentially feed the statements inside the active transaction loop
                     for (const s of stopOptions) {
                         await insertStopStmt.executeAsync({ $code: s.stopCode, $displayName: s.displayName });
-                        
+
                         if (s.transportOptions) {
                             for (const o of s.transportOptions) {
                                 await insertOptionStmt.executeAsync({ $stopCode: s.stopCode, $option: o });
@@ -157,21 +198,14 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
                     await insertOptionStmt.finalizeAsync();
                     await insertDateStmt.finalizeAsync();
                 }
-            });
 
-            // Stamped only after the rows are committed, so a rebuild interrupted
-            // partway is retried rather than trusted.
-            await db.execAsync(`PRAGMA user_version = ${CACHE_VERSION}`);
-            console.log(`SL stop cache rebuilt: ${stopOptions.length} stations (version ${CACHE_VERSION}).`);
-
-        } catch (e) {
-            console.error(`Error while initializing SL Service.`, e);
-            // A failed fetch is the caller's to describe; only wrap real cache faults.
-            if (e instanceof TransportApiError || e instanceof TransportUnreachableError) throw e;
-            throw new StopCacheError('rebuild', e);
-        }
+                // Part of the transaction, so a rebuild interrupted partway is
+                // retried rather than trusted.
+                await db.execAsync(`PRAGMA user_version = ${CACHE_VERSION}`);
+            })
+        );
     }
-    
+
     static getLineColor(lineCode: string) {
         switch (lineCode) {
             case '10':
@@ -214,17 +248,8 @@ export class SLService extends GenericTransportService<AdditionalSLStopInfo> {
         }
     }
 
-    /** The single connection every query and the cache rebuild share. */
-    private static async getDb(): Promise<SQLite.SQLiteDatabase> {
-        if (!SLService._db) {
-            SLService._db = await SQLite.openDatabaseAsync(SL_STOPS_CACHE_DB);
-        }
-        return SLService._db;
-    }
-
-    async runCacheDBQuery<R>(statement: string, values: SQLite.SQLiteBindParams = {}) {
-        const db = await SLService.getDb();
-        return await db.getAllAsync<R>(statement, values);
+    runCacheDBQuery<R>(statement: string, values: SQLite.SQLiteBindParams = {}) {
+        return stopsDb.run(db => db.getAllAsync<R>(statement, values));
     }
 
     async getStopOptionsFromDB(transportTypes: TransportTypeCode[]) {

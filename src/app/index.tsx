@@ -43,6 +43,8 @@ export default function Index() {
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  /** Bumped to load the stations again after a failure. */
+  const [stopsLoadAttempt, setStopsLoadAttempt] = useState(0);
 
   // Selections
   const [providerId, setProviderId] = useState(DEFAULT_PROVIDER_ID);
@@ -128,24 +130,19 @@ export default function Index() {
     loadStops();
 
     return () => { cancelled = true; };
-  }, [provider, effectiveTransport, initializing]);
+  }, [provider, effectiveTransport, initializing, stopsLoadAttempt]);
 
   // 3. Keep storage in step with what is actually shown. Changing provider or
   //    transport can move the selection on its own, and the widget reads storage
-  //    — so these are the single places each value is persisted.
+  //    — so this is the single place it is persisted. `effectiveStation` stays
+  //    empty until the stations for this transport have loaded, which keeps the
+  //    old station from being paired with a transport that may not serve it.
   useEffect(() => {
-    if (initializing || !effectiveTransport) return;
-    Storage.setTransportType(effectiveTransport).catch(e =>
-      console.error('Failed to persist the selected transport:', e)
+    if (initializing || !effectiveTransport || !effectiveStation) return;
+    Storage.setSelection(effectiveTransport, effectiveStation).catch(e =>
+      console.error('Failed to persist the selection:', e)
     );
-  }, [effectiveTransport, initializing]);
-
-  useEffect(() => {
-    if (initializing || !effectiveStation) return;
-    Storage.setStation(effectiveStation).catch(e =>
-      console.error('Failed to persist the selected station:', e)
-    );
-  }, [effectiveStation, initializing]);
+  }, [effectiveTransport, effectiveStation, initializing]);
 
   // 4. Core Fetch & Widget Update Logic
   const fetchDeparturesAndRefreshWidgets = useCallback(async (
@@ -219,7 +216,14 @@ export default function Index() {
   };
 
   const refresh = () => {
-    if (!effectiveStation) return;
+    // With no station list there is nothing to fetch departures for, so a retry
+    // has to start from the list itself.
+    if (!effectiveStation) {
+      setError(null);
+      setLoadedStops(null);
+      setStopsLoadAttempt(n => n + 1);
+      return;
+    }
     fetchDeparturesAndRefreshWidgets(
       provider, effectiveTransport, effectiveStation, currentStationLabel
     );
