@@ -3,24 +3,11 @@ import { FlexWidget, TextWidget } from 'react-native-android-widget';
 import { BoardFit, BoardProps, departuresThatFit, formatCountdown, REFRESH_CLICK_ACTION } from '../common';
 import { BoardHeader } from './boardHeader';
 
-/**
- * Heights in dp, for working out how many rows a resize leaves room for.
- * They describe this board specifically — the classic board sets type at a very
- * different size and carries its own numbers.
- */
-const FIT: BoardFit = {
-    // Header row and its rule, plus the 4dp padding above and below the list.
-    chromeHeight: 32,
-    // SL Gothic's line box is around 32dp at 20dp type — noticeably more than
-    // the nominal size — plus the divider's 6dp padding, 1dp rule and 6dp
-    // margin. Rounded up rather than down: a row too few leaves a little
-    // background showing, a row too many clips.
-    rowHeight: 45,
-    min: 2,
-    // Not a design limit but a sanity bound. This launcher ignores
-    // `maxResizeHeight`, so the board has to fill whatever height it is handed.
-    max: 10,
-};
+/** Pinned row heights, so the fits below are exact rather than font estimates. */
+const ROW_HEIGHT = 30;
+/** Space either side of the 1dp divider between two rows. */
+const DIVIDER_GAP = 6;
+const DIVIDER_LINE = 1;
 
 /**
  * At its smallest the launcher offers a single cell, and SL Gothic's line box
@@ -28,11 +15,38 @@ const FIT: BoardFit = {
  * exceed the height before the dividers are even counted.
  *
  * Rather than tighten the board everywhere, spacing is reduced only below this
- * height, and rows are pinned so the total is exact instead of depending on the
- * font's metrics. Every larger size keeps the normal spacing untouched.
+ * height. Every larger size keeps the normal spacing untouched.
  */
 const COMPACT_BELOW_DP = 140;
 const COMPACT_ROW_HEIGHT = 32;
+
+/** The shared header: 12dp type, 3dp padding above and below, a 2dp rule. */
+const HEADER_HEIGHT = 25;
+
+/**
+ * Heights in dp, for working out how many rows a resize leaves room for.
+ * They describe this board specifically — the classic board sets type at a very
+ * different size and carries its own numbers.
+ */
+const FIT: BoardFit = {
+    // Header (measured at 23dp; the rest is margin) plus 4dp of list padding
+    // above and below.
+    chromeHeight: HEADER_HEIGHT + 2 * 4,
+    // SL Gothic at 20dp sets a line about 29.5dp tall.
+    rowHeight: ROW_HEIGHT,
+    gapHeight: 2 * DIVIDER_GAP + DIVIDER_LINE,
+    min: 2,
+    // Not a design limit but a sanity bound. This launcher ignores
+    // `maxResizeHeight`, so the board has to fill whatever height it is handed.
+    max: 10,
+};
+
+const COMPACT_FIT: BoardFit = {
+    ...FIT,
+    chromeHeight: HEADER_HEIGHT + 2 * 2,
+    rowHeight: COMPACT_ROW_HEIGHT,
+    gapHeight: DIVIDER_LINE,
+};
 
 export function ModernBoard({
     stationName,
@@ -43,8 +57,10 @@ export function ModernBoard({
     updatedAt,
     heightDp,
 }: BoardProps) {
-    const visibleDepartures = departures.slice(0, departuresThatFit(heightDp, FIT));
     const compact = !!heightDp && heightDp < COMPACT_BELOW_DP;
+    const visibleDepartures = departures.slice(
+        0, departuresThatFit(heightDp, compact ? COMPACT_FIT : FIT)
+    );
 
     return (
         <FlexWidget
@@ -72,53 +88,61 @@ export function ModernBoard({
                     />
                 ) : visibleDepartures.map((d, index) => {
                     return (
-                        <FlexWidget
-                            key={d.id}
-                            style={{
-                                ...styles.row,
-                                ...(compact ? styles.rowCompact : {}),
-                                ...(index < visibleDepartures.length - 1
-                                    ? (compact ? styles.dividerOnly : styles.rowWithDivider)
-                                    : {}),
-                            }}
-                        >
+                        <FlexWidget key={d.id} style={{ width: 'match_parent' }}>
                             <FlexWidget
                                 style={{
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    flexGap: 8,
+                                    ...styles.row,
+                                    height: compact ? COMPACT_ROW_HEIGHT : ROW_HEIGHT,
                                 }}
                             >
                                 <FlexWidget
                                     style={{
-                                        backgroundColor: d.lineColor,
-                                        borderRadius: 4,
-                                        paddingHorizontal: 11,
-                                        paddingBottom: 2,
-                                        justifyContent: 'center',
-                                        alignItems: 'center'
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        flexGap: 8,
                                     }}
                                 >
+                                    <FlexWidget
+                                        style={{
+                                            backgroundColor: d.lineColor,
+                                            borderRadius: 4,
+                                            paddingHorizontal: 11,
+                                            paddingBottom: 2,
+                                            justifyContent: 'center',
+                                            alignItems: 'center'
+                                        }}
+                                    >
+                                        <TextWidget
+                                            text={d.lineCode}
+                                            style={{
+                                                ...styles.modernText,
+                                                fontSize: 14
+                                            }}
+                                        />
+                                    </FlexWidget>
                                     <TextWidget
-                                        text={d.lineCode}
+                                        text={d.destination}
                                         style={{
                                             ...styles.modernText,
-                                            fontSize: 14
+                                            marginBottom: 1
                                         }}
                                     />
                                 </FlexWidget>
                                 <TextWidget
-                                    text={d.destination}
-                                    style={{
-                                        ...styles.modernText,
-                                        marginBottom: 1
-                                    }}
+                                    text={formatCountdown(d.departsInMillis, presentation)}
+                                    style={styles.modernText}
                                 />
                             </FlexWidget>
-                            <TextWidget
-                                text={formatCountdown(d.departsInMillis, presentation)}
-                                style={styles.modernText}
-                            />
+                            {/* Its own element, so the gap is a known height rather than
+                                padding and a border folded into the row. */}
+                            {index < visibleDepartures.length - 1 ? (
+                                <FlexWidget
+                                    style={{
+                                        ...styles.divider,
+                                        marginVertical: compact ? 0 : DIVIDER_GAP,
+                                    }}
+                                />
+                            ) : null}
                         </FlexWidget>
                     )
                 })}
@@ -155,19 +179,9 @@ const styles = {
         justifyContent: 'space-between',
         alignItems: 'center',
     },
-    rowWithDivider: {
-        borderBottomWidth: 1,
-        borderBottomColor: '#FFFFFF',
-        paddingBottom: 6,
-        marginBottom: 6,
-    },
-    // Only at the smallest widget size: a pinned height so two rows are
-    // guaranteed to fit, and a divider carrying no spacing of its own.
-    rowCompact: {
-        height: COMPACT_ROW_HEIGHT,
-    },
-    dividerOnly: {
-        borderBottomWidth: 1,
-        borderBottomColor: '#FFFFFF',
+    divider: {
+        width: 'match_parent',
+        height: DIVIDER_LINE,
+        backgroundColor: '#FFFFFF',
     },
 } as const;

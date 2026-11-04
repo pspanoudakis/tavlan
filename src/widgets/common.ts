@@ -34,12 +34,24 @@ export interface BoardProps {
     heightDp?: number
 }
 
-/** What one board needs in order to work out how many rows fit inside it. */
+/**
+ * What one board needs in order to work out how many rows fit inside it.
+ *
+ * Boards pin these heights in their layout rather than estimating them from
+ * font metrics, so the count is exact: an estimate that runs a few dp high per
+ * row adds up to a whole missing row on a taller board.
+ *
+ * Heights are in the dp the host reports. Samsung's launcher reports sizes
+ * before its own scaling and shrinks the rendered board to fit, which scales
+ * rows and height alike, so the arithmetic still holds.
+ */
 export type BoardFit = {
     /** Everything above and below the rows: header, borders, list padding. */
     chromeHeight: number
-    /** Height of a single departure row. */
+    /** Height of a single departure row, as pinned in the layout. */
     rowHeight: number
+    /** Space between two rows, such as a divider and its margins. */
+    gapHeight: number
     /** Never show fewer than this, even if the host says there is no room. */
     min: number
     /** Never show more than this, however tall the widget is stretched. */
@@ -55,7 +67,10 @@ export type BoardFit = {
  */
 export function departuresThatFit(heightDp: number | undefined, fit: BoardFit): number {
     if (!heightDp || heightDp <= 0) return fit.min;
-    const fits = Math.floor((heightDp - fit.chromeHeight) / fit.rowHeight);
+    // n rows take n * row + (n - 1) * gap: there is no gap after the last row.
+    const fits = Math.floor(
+        (heightDp - fit.chromeHeight + fit.gapHeight) / (fit.rowHeight + fit.gapHeight)
+    );
     return Math.max(fit.min, Math.min(fit.max, fits));
 }
 

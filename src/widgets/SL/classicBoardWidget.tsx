@@ -3,17 +3,22 @@ import { FlexWidget, TextWidget } from 'react-native-android-widget';
 import { BoardHeader } from './boardHeader';
 import { BoardFit, BoardProps, departuresThatFit, formatCountdown, REFRESH_CLICK_ACTION } from '../common';
 
+/** Pinned on every row, so the fit below is exact rather than a font estimate. */
+const ROW_HEIGHT = 34;
+
 /**
  * Heights in dp, for working out how many rows a resize leaves room for.
  * They describe this board specifically — the modern board is laid out
  * differently and carries its own numbers.
  */
 const FIT: BoardFit = {
-    // Header row: 31dp of Jersey 10 plus its 2dp bottom rule.
-    chromeHeight: 24,
-    // One line of 31dp text at the default line spacing. Rounded up: showing 5
-    // rows in 216dp on the device puts the true height at or under 38dp.
-    rowHeight: 37,
+    // The shared header: 12dp type, 3dp padding above and below, a 2dp rule.
+    // Measured at 23dp on a Galaxy A56; the extra dp is margin, not a row.
+    chromeHeight: 25,
+    // Jersey 10 at 31dp sets a line about 33.7dp tall, so 34 changes nothing
+    // visible while making the row height a known number.
+    rowHeight: ROW_HEIGHT,
+    gapHeight: 0,
     min: 2,
     // Not a design limit but a sanity bound. This launcher ignores
     // `maxResizeHeight`, so the board has to fill whatever height it is handed.
@@ -60,6 +65,7 @@ export function ClassicBoard({
                             key={d.id}
                             style={{
                                 width: 'match_parent',
+                                height: ROW_HEIGHT,
                                 flexDirection: 'row',
                                 justifyContent: 'space-between',
                                 alignItems: 'center',
