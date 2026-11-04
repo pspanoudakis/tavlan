@@ -1,4 +1,5 @@
-import { TransportApiError, TransportUnreachableError } from '../errors';
+import { record } from '@/utils/refreshJournal';
+import { TransportApiError, TransportUnreachableError, messageOf } from '../errors';
 
 export type SLAPISite = {
     id: number;
@@ -70,12 +71,20 @@ async function fetchDataFromSLApi<R, T>(relativeEndpoint: string, mapper?: (resp
     // Only reaching the API and reading its bytes count as transport failures.
     let res: Response;
     let rawBody: string;
+    const endpoint = relativeEndpoint.split('?')[0];
+    const startedAt = Date.now();
     try {
         res = await fetch(getAPIEndpoint(relativeEndpoint));
         rawBody = await res.text();
     } catch (e) {
+        void record('fetch', `${endpoint} unreachable: ${messageOf(e)}`, Date.now() - startedAt);
         throw new TransportUnreachableError(e);
     }
+    void record(
+        'fetch',
+        `${endpoint} ${res.status}${res.ok ? '' : ` ${rawBody.trim().slice(0, 80)}`}`,
+        Date.now() - startedAt
+    );
 
     // Parsed leniently, because SL answers some rejections with invalid JSON —
     // a malformed stop id comes back as `{"message": 400 Bad requst ...}`. The

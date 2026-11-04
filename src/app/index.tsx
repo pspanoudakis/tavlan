@@ -16,6 +16,7 @@ import {
 } from '@/services/transport/genericTransportService';
 import type { TransportProvider } from '@/services/transport/provider';
 import { DEFAULT_PROVIDER_ID, getProvider, getService, TRANSPORT_PROVIDERS } from '@/services/transport/registry';
+import * as Journal from '@/utils/refreshJournal';
 import * as Storage from '@/utils/storage';
 import { formatUpdatedAt } from '@/widgets/common';
 import { getBoard } from '@/widgets/registry';
@@ -83,6 +84,11 @@ export default function Index() {
     : '';
   const currentStationLabel =
     stops?.find(s => s.stopCode === effectiveStation)?.displayName ?? '';
+
+  // TEMPORARY: see `@/utils/refreshJournal`.
+  useEffect(() => {
+    void Journal.printJournal();
+  }, []);
 
   // 1. Restore the saved provider, then its saved selection.
   useEffect(() => {

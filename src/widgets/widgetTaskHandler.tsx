@@ -1,6 +1,7 @@
 import { TransportUnreachableError, describeError, messageOf } from '@/services/transport/errors';
 import type { TransportProvider } from '@/services/transport/provider';
 import { getProvider, getService } from '@/services/transport/registry';
+import * as Journal from '@/utils/refreshJournal';
 import * as Storage from '@/utils/storage';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 import { BoardProps, REFRESH_CLICK_ACTION } from './common';
@@ -86,6 +87,23 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
 
   if (!shouldRefresh) return;
 
+  const startedAt = Date.now();
+  const task = `${props.widgetAction} ${widgetInfo.widgetName}#${widgetInfo.widgetId}`;
+  void Journal.record('task-start', task);
+  try {
+    const outcome = await refresh(props);
+    // Awaited, and queued behind the other rows, so all of them are written
+    // before the task ends and Android freezes the process.
+    await Journal.record('task-end', `${task} ${outcome}`, Date.now() - startedAt);
+  } catch (e) {
+    await Journal.record('task-end', `${task} threw: ${messageOf(e)}`, Date.now() - startedAt);
+    throw e;
+  }
+}
+
+/** Returns what happened, for the journal. */
+async function refresh(props: WidgetTaskHandlerProps): Promise<string> {
+  const widgetInfo = props.widgetInfo;
   const provider = getProvider(await Storage.getStoredProviderId().catch(() => null));
 
   // Which design to draw depends on the selected operator, so the provider has
@@ -93,23 +111,27 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
   const Board = getBoard(provider.id, widgetInfo.widgetName);
   if (!Board) {
     console.warn(`[departures-widget] unknown widget "${widgetInfo.widgetName}"`);
-    return;
+    return 'unknown widget';
   }
 
   let board: BoardProps;
+  let outcome: string;
   try {
     board = await loadBoard(provider);
+    outcome = `ok ${board.departures.length} departures`;
   } catch (error) {
     // Android can block the network during an automatic refresh, and nobody asked
     // for this one. The last board stays up, and its header shows how old it is.
     if (props.widgetAction === 'WIDGET_UPDATE' && error instanceof TransportUnreachableError) {
       console.warn('[departures-widget] keeping last board:', messageOf(error));
-      return;
+      return `kept last board: ${messageOf(error)}`;
     }
     board = await describeFailure(provider, error);
+    outcome = `error shown: ${messageOf(error)}`;
   }
 
   // The height arrives with every action, including WIDGET_RESIZED, which is how
   // stretching the widget turns into more departure rows.
   props.renderWidget(<Board {...board} heightDp={widgetInfo.height} />);
+  return outcome;
 }
