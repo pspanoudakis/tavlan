@@ -86,7 +86,10 @@ export function formatUpdatedAt(at: Date, presentation: BoardPresentation): stri
 
 /** Renders a countdown the way the active provider words it. */
 export function formatCountdown(departsInMillis: number, presentation: BoardPresentation): string {
-    const minutes = Math.ceil(departsInMillis / (1000 * 60));
+    // Rounded down, as SL's own app and station signs do: 1:59 left reads
+    // "1 min", and the last minute reads as "now". Rounding up put every
+    // board a minute ahead of the signs.
+    const minutes = Math.floor(departsInMillis / (1000 * 60));
     return minutes
         ? `${minutes}${presentation.strings.minutesSuffix}`
         : presentation.strings.now;
