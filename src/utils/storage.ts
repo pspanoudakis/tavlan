@@ -6,6 +6,7 @@ export const KV_STORAGE_KEYS = {
   PROVIDER: 'selected_provider',
   TRANSPORT: 'selected_transport',
   STATION: 'selected_station',
+  JOURNAL: 'refresh_journal_enabled',
 };
 
 /**
@@ -74,4 +75,13 @@ export async function setSelection(transport: TransportTypeCode, station: string
       await db.runAsync(UPSERT, KV_STORAGE_KEYS.STATION, station);
     })
   );
+}
+
+/** Whether `@/utils/refreshJournal` records anything. Off unless turned on. */
+export async function getJournalEnabled(): Promise<boolean> {
+  return (await getItem(KV_STORAGE_KEYS.JOURNAL)) === 'on';
+}
+
+export async function setJournalEnabled(enabled: boolean) {
+  await kv.run(db => db.runAsync(UPSERT, KV_STORAGE_KEYS.JOURNAL, enabled ? 'on' : 'off'));
 }
